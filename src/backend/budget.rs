@@ -178,7 +178,7 @@ pub async fn get_dashboard_kennzahlen() -> Result<DashboardKennzahlen, ServerFnE
         .iter()
         .filter(|b| b.art == BuchungsArt::Ausgang && b.erstellt_am == today)
         .map(|b| b.betrag)
-        .sum();
+        .fold(0.0, |acc, x| acc + x);
 
     let ausgaben_aktueller_monat: f64 = buchungen
         .iter()
@@ -188,7 +188,7 @@ pub async fn get_dashboard_kennzahlen() -> Result<DashboardKennzahlen, ServerFnE
                 && b.erstellt_am.month() == current_month
         })
         .map(|b| b.betrag)
-        .sum();
+        .fold(0.0, |acc, x| acc + x);
 
     let einnahmen_aktueller_monat: f64 = buchungen
         .iter()
@@ -198,9 +198,9 @@ pub async fn get_dashboard_kennzahlen() -> Result<DashboardKennzahlen, ServerFnE
                 && b.erstellt_am.month() == current_month
         })
         .map(|b| b.betrag)
-        .sum();
+        .fold(0.0, |acc, x| acc + x);
 
-    let summe_fixkosten: f64 = fixkosten.iter().map(|f| f.betrag).sum();
+    let summe_fixkosten: f64 = fixkosten.iter().map(|f| f.betrag).fold(0.0, |acc, x| acc + x);
 
     let durchschnitt_aktueller_monat = ausgaben_aktueller_monat / (tag_im_monat as f64);
 

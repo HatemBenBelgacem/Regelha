@@ -210,12 +210,12 @@ pub fn BuchungenSection() -> impl IntoView {
                                         .iter()
                                         .filter(|b| b.art == BuchungsArt::Eingang)
                                         .map(|b| b.betrag)
-                                        .sum();
+                                        .fold(0.0, |acc, x| acc + x);
                                     let summe_ausgang: f64 = filtered
                                         .iter()
                                         .filter(|b| b.art == BuchungsArt::Ausgang)
                                         .map(|b| b.betrag)
-                                        .sum();
+                                        .fold(0.0, |acc, x| acc + x);
                                     let saldo = summe_eingang - summe_ausgang;
                                     let saldo_class = if saldo >= 0.0 {
                                         "text-right text-success whitespace-nowrap"

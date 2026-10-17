@@ -127,7 +127,7 @@ pub fn FixkostenSection() -> impl IntoView {
                         {move || {
                             fixkosten_resource.get().map(|res| match res {
                                 Ok(items) => {
-                                    let gesamt_fixkosten: f64 = items.iter().map(|f| f.betrag).sum();
+                                    let gesamt_fixkosten: f64 = items.iter().map(|f| f.betrag).fold(0.0, |acc, x| acc + x);
 
                                     view! {
                                         <table class="table table-zebra table-sm sm:table-md w-full">
