@@ -6,6 +6,7 @@ async fn main() {
     use leptos::logging::log;
     use leptos::prelude::*;
     use leptos_axum::{generate_route_list, LeptosRoutes};
+    use std::net::SocketAddr;
 
     let _ = dotenvy::dotenv();
 
@@ -18,7 +19,15 @@ async fn main() {
 
     let db_pool = init_db_pool().await;
 
-    let conf = get_configuration(None).unwrap();
+    let mut conf = get_configuration(None).unwrap();
+
+    // Railway-Kompatibilität: Falls `PORT` gesetzt ist, auf `0.0.0.0:$PORT` lauschen
+    if let Ok(port_str) = std::env::var("PORT") {
+        if let Ok(port) = port_str.parse::<u16>() {
+            conf.leptos_options.site_addr = SocketAddr::from(([0, 0, 0, 0], port));
+        }
+    }
+
     let addr = conf.leptos_options.site_addr;
     let leptos_options = conf.leptos_options;
     let routes = generate_route_list(App);

@@ -56,7 +56,7 @@ pub fn BuchungenSection() -> impl IntoView {
             }
             _ => {
                 set_error_msg.set(Some(
-                    "Bitte einen gültigen positiven Betrag eingeben (z.B. 120.50).".to_string(),
+                    "Bitte einen gültigen positiven Betrag in CHF eingeben (z.B. 120.50).".to_string(),
                 ));
             }
         }
@@ -69,7 +69,7 @@ pub fn BuchungenSection() -> impl IntoView {
                     <div>
                         <h2 class="card-title text-lg sm:text-xl">"Ein-/Ausgaben (Buchungstabelle)"</h2>
                         <p class="text-xs sm:text-sm text-base-content/70">
-                            "Erfassung und Übersicht aller Zahlungseingänge und Zahlungsausgänge"
+                            "Erfassung und Übersicht aller Zahlungseingänge und Zahlungsausgänge in CHF"
                         </p>
                     </div>
 
@@ -129,7 +129,7 @@ pub fn BuchungenSection() -> impl IntoView {
                         </label>
                         <input
                             type="text"
-                            placeholder="z.B. Gehalt, Einkauf, Rückerstattung..."
+                            placeholder="z.B. Lohn, Einkauf, Rückerstattung..."
                             class="input input-bordered input-sm w-full"
                             prop:value=move || buchungstext.get()
                             on:input=move |ev| set_buchungstext.set(event_target_value(&ev))
@@ -139,7 +139,7 @@ pub fn BuchungenSection() -> impl IntoView {
 
                     <div class="sm:col-span-1 lg:col-span-2">
                         <label class="label py-1">
-                            <span class="label-text font-medium text-xs sm:text-sm">"Betrag (€)"</span>
+                            <span class="label-text font-medium text-xs sm:text-sm">"Betrag (CHF)"</span>
                         </label>
                         <input
                             type="text"
@@ -209,7 +209,7 @@ pub fn BuchungenSection() -> impl IntoView {
                                             <thead>
                                                 <tr class="text-xs sm:text-sm uppercase text-base-content/70">
                                                     <th>"Buchungstext"</th>
-                                                    <th class="text-right">"Betrag"</th>
+                                                    <th class="text-right">"Betrag (CHF)"</th>
                                                     <th class="w-12 text-right"></th>
                                                 </tr>
                                             </thead>
@@ -237,9 +237,9 @@ pub fn BuchungenSection() -> impl IntoView {
                                                             "text-right font-semibold text-error whitespace-nowrap"
                                                         };
                                                         let formatted_amount = if is_eingang {
-                                                            format!("+ {:.2} €", b.betrag)
+                                                            format!("+ CHF {:.2}", b.betrag)
                                                         } else {
-                                                            format!("- {:.2} €", b.betrag)
+                                                            format!("- CHF {:.2}", b.betrag)
                                                         };
                                                         let datum_str = b.erstellt_am.format("%d.%m.%Y").to_string();
                                                         let id = b.id;
@@ -277,15 +277,15 @@ pub fn BuchungenSection() -> impl IntoView {
                                                         <div class="flex flex-col sm:flex-row sm:gap-2">
                                                             <span>"Saldo"</span>
                                                             <span class="text-xs sm:text-sm font-normal text-base-content/70">
-                                                                {format!("(Eingänge: +{:.2} € | Ausgänge: -{:.2} €)", summe_eingang, summe_ausgang)}
+                                                                {format!("(Eingänge: +CHF {:.2} | Ausgänge: -CHF {:.2})", summe_eingang, summe_ausgang)}
                                                             </span>
                                                         </div>
                                                     </td>
                                                     <td class=saldo_class>
                                                         {if saldo >= 0.0 {
-                                                            format!("+ {:.2} €", saldo)
+                                                            format!("+ CHF {:.2}", saldo)
                                                         } else {
-                                                            format!("- {:.2} €", saldo.abs())
+                                                            format!("- CHF {:.2}", saldo.abs())
                                                         }}
                                                     </td>
                                                     <td></td>

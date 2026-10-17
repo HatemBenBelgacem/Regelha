@@ -9,20 +9,12 @@ pub fn BudgetDashboard() -> impl IntoView {
     view! {
         <div class="space-y-6">
             // Kopfzeile des Dashboards
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
                     <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">"Dashboard"</h1>
                     <p class="text-sm text-base-content/70">
-                        "Ausgaben-Analyse, Tagesschnitt und Hochrechnung bis Monatsende"
+                        "Ausgaben-Analyse, Tagesschnitt und Hochrechnung bis Monatsende (in CHF)"
                     </p>
-                </div>
-                <div class="flex flex-wrap gap-2">
-                    <a href="/buchungen" class="btn btn-primary btn-sm">
-                        "Ein-/Ausgaben verwalten"
-                    </a>
-                    <a href="/fixkosten" class="btn btn-outline btn-sm">
-                        "Fixkosten verwalten"
-                    </a>
                 </div>
             </div>
 
@@ -56,7 +48,7 @@ pub fn BudgetDashboard() -> impl IntoView {
                                                     <span class="badge badge-ghost badge-sm">{k.heute_datum.clone()}</span>
                                                 </div>
                                                 <div class="text-2xl sm:text-3xl font-extrabold text-error mt-2">
-                                                    {format!("{:.2} €", k.ausgaben_heute)}
+                                                    {format!("CHF {:.2}", k.ausgaben_heute)}
                                                 </div>
                                                 <p class="text-xs text-base-content/60 mt-1">
                                                     "Summe der Ausgaben des aktuellen Tages"
@@ -74,7 +66,7 @@ pub fn BudgetDashboard() -> impl IntoView {
                                                     <span class="badge badge-primary badge-outline badge-sm">{k.monat_name.clone()}</span>
                                                 </div>
                                                 <div class="text-2xl sm:text-3xl font-extrabold text-primary mt-2">
-                                                    {format!("{:.2} €", k.ausgaben_aktueller_monat)}
+                                                    {format!("CHF {:.2}", k.ausgaben_aktueller_monat)}
                                                 </div>
                                                 <p class="text-xs text-base-content/60 mt-1">
                                                     {format!("Bisherige Ausgaben (Tag 1 bis {})", k.tag_im_monat)}
@@ -94,7 +86,7 @@ pub fn BudgetDashboard() -> impl IntoView {
                                                     </span>
                                                 </div>
                                                 <div class="text-2xl sm:text-3xl font-extrabold text-secondary mt-2">
-                                                    {format!("{:.2} €", k.durchschnitt_aktueller_monat)}
+                                                    {format!("CHF {:.2}", k.durchschnitt_aktueller_monat)}
                                                 </div>
                                                 <p class="text-xs text-base-content/60 mt-1">
                                                     "Total Ausgaben ÷ Anzahl Tage bis heute"
@@ -114,7 +106,7 @@ pub fn BudgetDashboard() -> impl IntoView {
                                                     </span>
                                                 </div>
                                                 <div class="text-2xl sm:text-3xl font-extrabold text-warning mt-2">
-                                                    {format!("{:.2} €", k.voraussichtliche_ausgaben_monatsende)}
+                                                    {format!("CHF {:.2}", k.voraussichtliche_ausgaben_monatsende)}
                                                 </div>
                                                 <p class="text-xs text-base-content/60 mt-1">
                                                     {format!("Voraussichtliche Ausgaben bis Ende {}", k.monat_name)}
@@ -148,7 +140,7 @@ pub fn BudgetDashboard() -> impl IntoView {
                                                     <div class="p-3 rounded-box bg-base-200/70">
                                                         <div class="text-xs text-base-content/60">"Prognose inkl. Fixkosten"</div>
                                                         <div class="text-lg font-bold text-warning">
-                                                            {format!("{:.2} €", k.voraussichtliche_gesamtausgaben_inkl_fixkosten)}
+                                                            {format!("CHF {:.2}", k.voraussichtliche_gesamtausgaben_inkl_fixkosten)}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -162,22 +154,22 @@ pub fn BudgetDashboard() -> impl IntoView {
                                                     <div class="p-3 rounded-box bg-base-200/70">
                                                         <div class="text-xs text-base-content/60">"Einnahmen (Monat)"</div>
                                                         <div class="text-lg sm:text-xl font-bold text-success">
-                                                            {format!("+ {:.2} €", k.einnahmen_aktueller_monat)}
+                                                            {format!("+ CHF {:.2}", k.einnahmen_aktueller_monat)}
                                                         </div>
                                                     </div>
                                                     <div class="p-3 rounded-box bg-base-200/70">
                                                         <div class="text-xs text-base-content/60">"Fixkosten (Monat)"</div>
                                                         <div class="text-lg sm:text-xl font-bold text-warning">
-                                                            {format!("- {:.2} €", k.summe_fixkosten)}
+                                                            {format!("- CHF {:.2}", k.summe_fixkosten)}
                                                         </div>
                                                     </div>
                                                     <div class="p-3 rounded-box bg-base-200/70">
                                                         <div class="text-xs text-base-content/60">"Erwarteter Saldo"</div>
                                                         <div class=restbudget_class>
                                                             {if restbudget_prognose >= 0.0 {
-                                                                format!("+ {:.2} €", restbudget_prognose)
+                                                                format!("+ CHF {:.2}", restbudget_prognose)
                                                             } else {
-                                                                format!("- {:.2} €", restbudget_prognose.abs())
+                                                                format!("- CHF {:.2}", restbudget_prognose.abs())
                                                             }}
                                                         </div>
                                                     </div>

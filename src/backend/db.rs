@@ -27,7 +27,7 @@ pub async fn init_db_pool() -> Option<PgPool> {
                 if let Err(err) = run_schema_init(&pool).await {
                     log!("Warnung: Tabellen konnten nicht initialisiert werden: {err}");
                 } else {
-                    log!("PostgreSQL-Verbindung und Tabellen (buchungen, fixkosten) bereit.");
+                    log!("PostgreSQL-Verbindung und Tabellen (buchungen, fixkosten, benutzer) bereit.");
                 }
                 Some(pool)
             }
@@ -57,7 +57,6 @@ async fn run_schema_init(pool: &PgPool) -> Result<(), sqlx::Error> {
     .execute(pool)
     .await?;
 
-    // Falls die Tabelle bereits ohne `erstellt_am` existierte, Spalte nachziehen
     sqlx::query(
         r#"
         ALTER TABLE buchungen
@@ -76,6 +75,33 @@ async fn run_schema_init(pool: &PgPool) -> Result<(), sqlx::Error> {
         );
         "#,
     )
+    .execute(pool)
+    .await?;
+
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS benutzer (
+            id UUID PRIMARY KEY,
+            benutzername TEXT UNIQUE NOT NULL,
+            passwort_hash TEXT NOT NULL
+        );
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
+    // Standard-Benutzer "admin" (Passwort: "admin123") anlegen, falls noch nicht vorhanden
+    let default_hash = crate::backend::auth::hash_password("admin", "admin123");
+    sqlx::query(
+        r#"
+        INSERT INTO benutzer (id, benutzername, passwort_hash)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (benutzername) DO NOTHING;
+        "#,
+    )
+    .bind(uuid::Uuid::new_v4())
+    .bind("admin")
+    .bind(default_hash)
     .execute(pool)
     .await?;
 

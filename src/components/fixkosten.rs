@@ -52,7 +52,8 @@ pub fn FixkostenSection() -> impl IntoView {
             }
             _ => {
                 set_error_msg.set(Some(
-                    "Bitte einen gültigen positiven Betrag eingeben (z.B. 950.00).".to_string(),
+                    "Bitte einen gültigen positiven Betrag in CHF eingeben (z.B. 950.00)."
+                        .to_string(),
                 ));
             }
         }
@@ -64,7 +65,7 @@ pub fn FixkostenSection() -> impl IntoView {
                 <div>
                     <h2 class="card-title text-lg sm:text-xl">"Fixkosten"</h2>
                     <p class="text-xs sm:text-sm text-base-content/70">
-                        "Erfassung wiederkehrender monatlicher Fixkosten (Miete, Versicherungen, Abos)"
+                        "Erfassung wiederkehrender monatlicher Fixkosten in CHF (Miete, Krankenkasse, Abos)"
                     </p>
                 </div>
 
@@ -76,7 +77,7 @@ pub fn FixkostenSection() -> impl IntoView {
                         </label>
                         <input
                             type="text"
-                            placeholder="z.B. Warmmiete, Strom, Haftpflicht..."
+                            placeholder="z.B. Miete, Krankenkasse, Strom..."
                             class="input input-bordered input-sm w-full"
                             prop:value=move || buchungstext.get()
                             on:input=move |ev| set_buchungstext.set(event_target_value(&ev))
@@ -86,7 +87,7 @@ pub fn FixkostenSection() -> impl IntoView {
 
                     <div class="sm:col-span-1 lg:col-span-3">
                         <label class="label py-1">
-                            <span class="label-text font-medium text-xs sm:text-sm">"Betrag (€)"</span>
+                            <span class="label-text font-medium text-xs sm:text-sm">"Betrag (CHF)"</span>
                         </label>
                         <input
                             type="text"
@@ -133,7 +134,7 @@ pub fn FixkostenSection() -> impl IntoView {
                                             <thead>
                                                 <tr class="text-xs sm:text-sm uppercase text-base-content/70">
                                                     <th>"Buchungstext"</th>
-                                                    <th class="text-right">"Betrag"</th>
+                                                    <th class="text-right">"Betrag (CHF)"</th>
                                                     <th class="w-12 text-right"></th>
                                                 </tr>
                                             </thead>
@@ -153,7 +154,7 @@ pub fn FixkostenSection() -> impl IntoView {
                                                             <tr>
                                                                 <td class="font-medium">{f.buchungstext}</td>
                                                                 <td class="text-right font-semibold text-warning whitespace-nowrap">
-                                                                    {format!("{:.2} €", f.betrag)}
+                                                                    {format!("CHF {:.2}", f.betrag)}
                                                                 </td>
                                                                 <td class="text-right">
                                                                     <button
@@ -174,7 +175,7 @@ pub fn FixkostenSection() -> impl IntoView {
                                                 <tr class="font-bold text-sm sm:text-base bg-base-200/50">
                                                     <td>"Summe Fixkosten"</td>
                                                     <td class="text-right text-warning whitespace-nowrap">
-                                                        {format!("{:.2} €", gesamt_fixkosten)}
+                                                        {format!("CHF {:.2}", gesamt_fixkosten)}
                                                     </td>
                                                     <td></td>
                                                 </tr>
