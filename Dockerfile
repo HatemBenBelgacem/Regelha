@@ -3,14 +3,15 @@
 # =============================================================================
 FROM rustlang/rust:nightly-bookworm AS builder
 
-# System-Abhängigkeiten + Node.js/npm installieren
+# System-Abhängigkeiten + Node.js 22 (Tailwind CSS v4 benötigt Node >= 20) installieren
 RUN apt-get update && apt-get install -y \
     pkg-config \
     libssl-dev \
     curl \
     ca-certificates \
-    nodejs \
-    npm \
+    gnupg \
+    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
 # WASM-Target und cargo-leptos (vorab kompiliertes Binary via cargo-binstall) installieren
