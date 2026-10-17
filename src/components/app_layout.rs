@@ -1,4 +1,4 @@
-use leptos::prelude::*;
+use leptos::{prelude::*, suspense::Unsuspend};
 use leptos_router::nested_router::Outlet;
 
 use crate::{
@@ -39,7 +39,10 @@ pub fn AppLayout() -> impl IntoView {
                     None => user_resource.get().map(|res| res.ok().flatten()),
                 };
 
-                effective_user.map(|user_opt| match user_opt {
+                // `Unsuspend` baut Layout und Outlet erst, wenn alles geladen ist – und nur einmal.
+                // Ohne das ruft Suspense dieses Closure beim SSR mehrfach auf, das Dashboard erzeugt
+                // doppelte Ressourcen und die Hydration im Browser bricht mit einer Panic ab.
+                effective_user.map(|user_opt| Unsuspend::new(move || match user_opt {
                     Some(user) => view! {
                         <div class="min-h-screen flex flex-col bg-[#F8FAFC] text-base-content">
                             // 1. Header inkl. Menüband
@@ -67,7 +70,7 @@ pub fn AppLayout() -> impl IntoView {
                     None => view! {
                         <LoginMaske on_authenticated=on_authenticated/>
                     }.into_any(),
-                })
+                }))
             }}
         </Suspense>
     }
