@@ -1,9 +1,12 @@
+use chrono::Local;
 use leptos::prelude::*;
 
 use crate::backend::budget::{add_buchung, delete_buchung, get_buchungen, BuchungsArt};
 
 #[component]
 pub fn BuchungenSection() -> impl IntoView {
+    let today_iso = Local::now().date_naive().format("%Y-%m-%d").to_string();
+    let (datum_input, set_datum_input) = signal(today_iso);
     let (buchungstext, set_buchungstext) = signal(String::new());
     let (betrag_input, set_betrag_input) = signal(String::new());
     let (art, set_art) = signal(BuchungsArt::Eingang);
@@ -12,13 +15,15 @@ pub fn BuchungenSection() -> impl IntoView {
 
     let buchungen_resource = Resource::new(|| (), |_| get_buchungen());
 
-    let create_action =
-        Action::new(move |(text, betrag, buchungs_art): &(String, f64, BuchungsArt)| {
+    let create_action = Action::new(
+        move |(text, betrag, buchungs_art, datum): &(String, f64, BuchungsArt, String)| {
             let text = text.clone();
             let betrag = *betrag;
             let buchungs_art = *buchungs_art;
-            async move { add_buchung(text, betrag, buchungs_art).await }
-        });
+            let datum = Some(datum.clone());
+            async move { add_buchung(text, betrag, buchungs_art, datum).await }
+        },
+    );
 
     let delete_action = Action::new(move |id: &uuid::Uuid| {
         let id = *id;
@@ -52,11 +57,12 @@ pub fn BuchungenSection() -> impl IntoView {
         match raw_amount.trim().parse::<f64>() {
             Ok(val) if val > 0.0 => {
                 set_error_msg.set(None);
-                create_action.dispatch((text, val, art.get()));
+                create_action.dispatch((text, val, art.get(), datum_input.get()));
             }
             _ => {
                 set_error_msg.set(Some(
-                    "Bitte einen gültigen positiven Betrag in CHF eingeben (z.B. 120.50).".to_string(),
+                    "Bitte einen gültigen positiven Betrag in CHF eingeben (z.B. 120.50)."
+                        .to_string(),
                 ));
             }
         }
@@ -69,7 +75,7 @@ pub fn BuchungenSection() -> impl IntoView {
                     <div>
                         <h2 class="card-title text-lg sm:text-xl">"Ein-/Ausgaben (Buchungstabelle)"</h2>
                         <p class="text-xs sm:text-sm text-base-content/70">
-                            "Erfassung und Übersicht aller Zahlungseingänge und Zahlungsausgänge in CHF"
+                            "Erfassung und Übersicht deiner persönlichen Zahlungseingänge und Zahlungsausgänge in CHF"
                         </p>
                     </div>
 
@@ -99,9 +105,9 @@ pub fn BuchungenSection() -> impl IntoView {
                     </div>
                 </div>
 
-                // Formular zum Erfassen neuer Buchungen (Responsiv für Mobile, Tablet, Desktop)
+                // Formular zum Erfassen neuer Buchungen (inkl. Datum, Buchungstext, Betrag)
                 <form on:submit=on_submit class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 bg-base-200/60 p-3 sm:p-4 rounded-box items-end">
-                    <div class="sm:col-span-2 lg:col-span-3">
+                    <div class="sm:col-span-1 lg:col-span-3">
                         <label class="label py-1">
                             <span class="label-text font-medium text-xs sm:text-sm">"Buchungsart"</span>
                         </label>
@@ -123,7 +129,20 @@ pub fn BuchungenSection() -> impl IntoView {
                         </div>
                     </div>
 
-                    <div class="sm:col-span-2 lg:col-span-5">
+                    <div class="sm:col-span-1 lg:col-span-2">
+                        <label class="label py-1">
+                            <span class="label-text font-medium text-xs sm:text-sm">"Datum"</span>
+                        </label>
+                        <input
+                            type="date"
+                            class="input input-bordered input-sm w-full"
+                            prop:value=move || datum_input.get()
+                            on:input=move |ev| set_datum_input.set(event_target_value(&ev))
+                            required
+                        />
+                    </div>
+
+                    <div class="sm:col-span-2 lg:col-span-3">
                         <label class="label py-1">
                             <span class="label-text font-medium text-xs sm:text-sm">"Buchungstext"</span>
                         </label>
@@ -169,7 +188,7 @@ pub fn BuchungenSection() -> impl IntoView {
                     </div>
                 })}
 
-                // Buchungstabelle (Spalten: Buchungstext, Betrag)
+                // Buchungstabelle (Spalten: Datum, Buchungstext, Benutzer, Betrag)
                 <div class="overflow-x-auto -mx-2 sm:mx-0">
                     <Suspense fallback=move || view! {
                         <div class="flex justify-center p-8">
@@ -208,7 +227,9 @@ pub fn BuchungenSection() -> impl IntoView {
                                         <table class="table table-zebra table-sm sm:table-md w-full">
                                             <thead>
                                                 <tr class="text-xs sm:text-sm uppercase text-base-content/70">
+                                                    <th class="w-32">"Datum"</th>
                                                     <th>"Buchungstext"</th>
+                                                    <th class="w-40">"Benutzer"</th>
                                                     <th class="text-right">"Betrag (CHF)"</th>
                                                     <th class="w-12 text-right"></th>
                                                 </tr>
@@ -217,7 +238,7 @@ pub fn BuchungenSection() -> impl IntoView {
                                                 {if filtered.is_empty() {
                                                     view! {
                                                         <tr>
-                                                            <td colspan="3" class="text-center text-base-content/50 py-6">
+                                                            <td colspan="5" class="text-center text-base-content/50 py-6">
                                                                 "Keine Buchungen vorhanden."
                                                             </td>
                                                         </tr>
@@ -242,18 +263,24 @@ pub fn BuchungenSection() -> impl IntoView {
                                                             format!("- CHF {:.2}", b.betrag)
                                                         };
                                                         let datum_str = b.erstellt_am.format("%d.%m.%Y").to_string();
+                                                        let benutzer_name = b.benutzer;
                                                         let id = b.id;
 
                                                         view! {
                                                             <tr>
+                                                                <td class="whitespace-nowrap text-base-content/80 font-mono text-xs sm:text-sm">
+                                                                    {datum_str}
+                                                                </td>
                                                                 <td class="font-medium">
                                                                     <div class="flex flex-wrap items-center gap-1">
                                                                         <span class=badge_class>{badge_label}</span>
                                                                         <span>{b.buchungstext}</span>
-                                                                        <span class="text-xs text-base-content/50 ml-1">
-                                                                            {format!("({datum_str})")}
-                                                                        </span>
                                                                     </div>
+                                                                </td>
+                                                                <td>
+                                                                    <span class="badge badge-ghost badge-sm font-medium">
+                                                                        {benutzer_name}
+                                                                    </span>
                                                                 </td>
                                                                 <td class=amount_class>{formatted_amount}</td>
                                                                 <td class="text-right">
@@ -273,7 +300,7 @@ pub fn BuchungenSection() -> impl IntoView {
                                             </tbody>
                                             <tfoot>
                                                 <tr class="font-bold text-sm sm:text-base bg-base-200/50">
-                                                    <td>
+                                                    <td colspan="3">
                                                         <div class="flex flex-col sm:flex-row sm:gap-2">
                                                             <span>"Saldo"</span>
                                                             <span class="text-xs sm:text-sm font-normal text-base-content/70">

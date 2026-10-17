@@ -1,5 +1,5 @@
 [package]
-name = "budgetplaner"
+name = "regelha"
 version = "0.1.0"
 edition = "2024"
 
@@ -73,7 +73,7 @@ panic = "abort"
 
 [package.metadata.leptos]
 # Name der generierten JS/WASM/CSS-Dateien in target/site/pkg/
-output-name = "budgetplaner"
+output-name = "regelha"
 
 # Zielverzeichnis für den gebauten Server & Client
 site-root = "target/site"

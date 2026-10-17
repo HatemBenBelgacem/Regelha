@@ -50,7 +50,7 @@ pub fn LoginMaske(on_authenticated: Callback<AuthUser>) -> impl IntoView {
     };
 
     view! {
-        <div class="min-h-screen flex items-center justify-center bg-base-200 p-4">
+        <div class="min-h-screen flex items-center justify-center bg-[#F8FAFC] p-4">
             <div class="card w-full max-w-md bg-base-100 shadow-lg border border-base-300">
                 <div class="card-body p-6 sm:p-8 space-y-5">
                     <div class="text-center space-y-1">
@@ -59,7 +59,7 @@ pub fn LoginMaske(on_authenticated: Callback<AuthUser>) -> impl IntoView {
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                             </svg>
                         </div>
-                        <h1 class="text-2xl font-bold tracking-tight text-base-content">"Budgetplaner"</h1>
+                        <h1 class="text-2xl font-bold tracking-tight text-base-content">"Regelha"</h1>
                         <p class="text-xs sm:text-sm text-base-content/60">
                             "Finanzverwaltung in Schweizer Franken (CHF)"
                         </p>

@@ -1,5 +1,7 @@
 pub mod app_layout;
+pub mod aufgaben;
 pub mod buchungen;
+pub mod chat;
 pub mod dashboard;
 pub mod fixkosten;
 pub mod header;

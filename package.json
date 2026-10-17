@@ -1,10 +1,10 @@
 {
-  "name": "budgetplaner",
+  "name": "regelha",
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build:css": "tailwindcss -i ./style/tailwind.css -o ./target/site/pkg/budgetplaner.css --minify",
-    "watch:css": "tailwindcss -i ./style/tailwind.css -o ./target/site/pkg/budgetplaner.css --watch"
+    "build:css": "tailwindcss -i ./style/tailwind.css -o ./target/site/pkg/regelha.css --minify",
+    "watch:css": "tailwindcss -i ./style/tailwind.css -o ./target/site/pkg/regelha.css --watch"
   },
   "devDependencies": {
     "@tailwindcss/cli": "^4.3.3",

@@ -48,16 +48,16 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Gebautes Server-Binary und statische Site-Assets (WASM/JS/CSS) kopieren
-COPY --from=builder /app/target/release/budgetplaner /app/budgetplaner
+COPY --from=builder /app/target/release/regelha /app/regelha
 COPY --from=builder /app/target/site /app/target/site
 COPY --from=builder /app/Cargo.toml /app/Cargo.toml
 
 # Standard-Konfiguration für Produktion (Railway überschreibt PORT automatisch)
-ENV RUST_LOG="info,budgetplaner=info"
+ENV RUST_LOG="info,regelha=info"
 ENV LEPTOS_SITE_ADDR="0.0.0.0:8080"
 ENV LEPTOS_SITE_ROOT="target/site"
 ENV PORT="8080"
 
 EXPOSE 8080
 
-CMD ["/app/budgetplaner"]
+CMD ["/app/regelha"]

@@ -29,7 +29,7 @@ pub fn AppLayout() -> impl IntoView {
 
     view! {
         <Suspense fallback=move || view! {
-            <div class="min-h-screen flex items-center justify-center bg-base-200">
+            <div class="min-h-screen flex items-center justify-center bg-[#F8FAFC]">
                 <span class="loading loading-spinner loading-lg text-primary"></span>
             </div>
         }>
@@ -41,7 +41,7 @@ pub fn AppLayout() -> impl IntoView {
 
                 effective_user.map(|user_opt| match user_opt {
                     Some(user) => view! {
-                        <div class="min-h-screen flex flex-col bg-base-200 text-base-content">
+                        <div class="min-h-screen flex flex-col bg-[#F8FAFC] text-base-content">
                             // 1. Header inkl. Menüband
                             <Header user=user on_logout=on_logout/>
 

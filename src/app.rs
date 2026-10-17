@@ -6,8 +6,8 @@ use leptos_router::{
 };
 
 use crate::components::{
-    app_layout::AppLayout, buchungen::BuchungenSection, dashboard::BudgetDashboard,
-    fixkosten::FixkostenSection,
+    app_layout::AppLayout, aufgaben::AufgabenSection, buchungen::BuchungenSection,
+    chat::ChatSection, dashboard::BudgetDashboard, fixkosten::FixkostenSection,
 };
 
 pub fn shell(options: LeptosOptions) -> impl IntoView {
@@ -21,7 +21,7 @@ pub fn shell(options: LeptosOptions) -> impl IntoView {
                 <HydrationScripts options/>
                 <MetaTags/>
             </head>
-            <body class="min-h-screen bg-base-200 text-base-content">
+            <body class="min-h-screen bg-[#F8FAFC] text-base-content">
                 <App/>
             </body>
         </html>
@@ -33,8 +33,8 @@ pub fn App() -> impl IntoView {
     provide_meta_context();
 
     view! {
-        <Stylesheet id="leptos" href="/pkg/budgetplaner.css"/>
-        <Title text="Budgetplaner"/>
+        <Stylesheet id="leptos" href="/pkg/regelha.css"/>
+        <Title text="Regelha"/>
 
         <Router>
             <Routes fallback=|| "Seite nicht gefunden.".into_view()>
@@ -42,6 +42,8 @@ pub fn App() -> impl IntoView {
                     <Route path=StaticSegment("") view=BudgetDashboard/>
                     <Route path=StaticSegment("buchungen") view=BuchungenSection/>
                     <Route path=StaticSegment("fixkosten") view=FixkostenSection/>
+                    <Route path=StaticSegment("aufgaben") view=AufgabenSection/>
+                    <Route path=StaticSegment("chat") view=ChatSection/>
                 </ParentRoute>
             </Routes>
         </Router>
