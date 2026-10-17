@@ -1,0 +1,14 @@
+{
+  "name": "budgetplaner",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build:css": "tailwindcss -i ./style/tailwind.css -o ./target/site/pkg/budgetplaner.css --minify",
+    "watch:css": "tailwindcss -i ./style/tailwind.css -o ./target/site/pkg/budgetplaner.css --watch"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.3",
+    "daisyui": "^5.7.50",
+    "tailwindcss": "^4.3.3"
+  }
+}
