@@ -13,9 +13,10 @@ RUN apt-get update && apt-get install -y \
     npm \
     && rm -rf /var/lib/apt/lists/*
 
-# WASM-Target und cargo-leptos installieren
+# WASM-Target und cargo-leptos (vorab kompiliertes Binary via cargo-binstall) installieren
 RUN rustup target add wasm32-unknown-unknown
-RUN cargo install --locked cargo-leptos
+RUN curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash \
+    && cargo binstall cargo-leptos -y --force || cargo install --locked cargo-leptos
 
 WORKDIR /app
 

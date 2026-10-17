@@ -49,9 +49,9 @@ pub fn AppLayout() -> impl IntoView {
                             <div class="drawer lg:drawer-open flex-1">
                                 <input id="app-sideboard-drawer" type="checkbox" class="drawer-toggle" />
 
-                                // Content-Bereich
-                                <div class="drawer-content flex flex-col p-3 sm:p-6 lg:p-8 overflow-x-hidden">
-                                    <main class="container mx-auto max-w-6xl w-full space-y-6 sm:space-y-8">
+                                // Content-Bereich (volle verfügbare Breite)
+                                <div class="drawer-content flex flex-col p-2 sm:p-4 lg:p-6 overflow-x-hidden w-full">
+                                    <main class="w-full max-w-none flex-1 flex flex-col space-y-4 sm:space-y-6">
                                         <Outlet/>
                                     </main>
                                 </div>

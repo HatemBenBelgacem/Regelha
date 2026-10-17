@@ -121,6 +121,8 @@ pub fn ChatSection() -> impl IntoView {
     let uebersicht_resource = Resource::new(|| (), |_| get_chat_uebersicht());
 
     let (active_chat, set_active_chat) = signal(Option::<ChatRaum>::None);
+    // Auf Mobilgeräten (< md): true = Teilnehmerliste anzeigen, false = Nachrichtenbereich anzeigen
+    let (mobile_show_list, set_mobile_show_list) = signal(true);
     let (nachricht_text, set_nachricht_text) = signal(String::new());
     let (pending_anhaenge, set_pending_anhaenge) = signal(Vec::<PendingAnhang>::new());
     let (is_dragging, set_is_dragging) = signal(false);
@@ -162,6 +164,7 @@ pub fn ChatSection() -> impl IntoView {
             match res {
                 Ok(raum) => {
                     set_active_chat.set(Some(raum));
+                    set_mobile_show_list.set(false);
                     set_error_msg.set(None);
                     uebersicht_resource.refetch();
                 }
@@ -184,6 +187,7 @@ pub fn ChatSection() -> impl IntoView {
                     set_selected_group_members.set(Vec::new());
                     set_show_group_form.set(false);
                     set_active_chat.set(Some(raum));
+                    set_mobile_show_list.set(false);
                     set_error_msg.set(None);
                     uebersicht_resource.refetch();
                 }
@@ -318,13 +322,44 @@ pub fn ChatSection() -> impl IntoView {
     };
 
     view! {
-        <section class="space-y-4">
+        <section class="w-full max-w-none flex-1 flex flex-col space-y-3 sm:space-y-4">
+            // Kopfbereich + Mobile-Umschalter
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
-                    <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">"Chat"</h1>
+                    <h1 class="text-xl sm:text-2xl lg:text-3xl font-bold tracking-tight">"Chat"</h1>
                     <p class="text-xs sm:text-sm text-base-content/70">
                         "Direkt- und Gruppenchats mit Datei- & Bildupload per Drag & Drop oder Copy & Paste"
                     </p>
+                </div>
+
+                // Auf Mobilgeräten (< md): Umschalter zwischen Teilnehmerliste und aktivem Chat
+                <div class="join grid grid-cols-2 md:hidden w-full sm:w-auto">
+                    <button
+                        type="button"
+                        class=move || {
+                            if mobile_show_list.get() {
+                                "btn btn-xs sm:btn-sm join-item bg-[#66023C] text-white border-[#66023C]"
+                            } else {
+                                "btn btn-xs sm:btn-sm join-item btn-outline border-slate-300 text-slate-700"
+                            }
+                        }
+                        on:click=move |_| set_mobile_show_list.set(true)
+                    >
+                        "👥 Teilnehmer & Gruppen"
+                    </button>
+                    <button
+                        type="button"
+                        class=move || {
+                            if !mobile_show_list.get() {
+                                "btn btn-xs sm:btn-sm join-item bg-[#66023C] text-white border-[#66023C]"
+                            } else {
+                                "btn btn-xs sm:btn-sm join-item btn-outline border-slate-300 text-slate-700"
+                            }
+                        }
+                        on:click=move |_| set_mobile_show_list.set(false)
+                    >
+                        "💬 Nachrichten"
+                    </button>
                 </div>
             </div>
 
@@ -334,13 +369,27 @@ pub fn ChatSection() -> impl IntoView {
                 </div>
             })}
 
-            <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 min-h-[640px]">
+            // Haupt-Container über die gesamte verfügbare Breite & Höhe des Contentbereichs
+            <div class="w-full grid grid-cols-1 md:grid-cols-12 gap-3 sm:gap-4 h-[calc(100dvh-10.5rem)] md:h-[calc(100dvh-8.5rem)] min-h-[520px]">
                 // LINKE SPALTE: Chatteilnehmer & Gruppenchats
-                <div class="lg:col-span-4 card bg-base-100 shadow-sm border border-base-300 flex flex-col">
-                    <div class="card-body p-4 space-y-5 flex-1 overflow-y-auto">
+                // Mobile (< md): nur sichtbar wenn mobile_show_list == true
+                // Tablet (md:): 5/12 Spalten | Laptop (lg:): 4/12 Spalten | Desktop (xl:): 3/12 Spalten
+                <div
+                    class=move || {
+                        let mobile_vis = if mobile_show_list.get() {
+                            "flex"
+                        } else {
+                            "hidden md:flex"
+                        };
+                        format!(
+                            "{mobile_vis} md:col-span-5 lg:col-span-4 xl:col-span-3 card bg-base-100 shadow-sm border border-base-300 flex-col h-full overflow-hidden"
+                        )
+                    }
+                >
+                    <div class="card-body p-3 sm:p-4 space-y-4 flex-1 overflow-y-auto">
                         // 1. Bereich: Gruppenchats + Button zum Erstellen
                         <div class="space-y-2">
-                            <div class="flex items-center justify-between">
+                            <div class="flex items-center justify-between gap-2">
                                 <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500">
                                     "Gruppenchats"
                                 </h2>
@@ -404,7 +453,7 @@ pub fn ChatSection() -> impl IntoView {
                                                                     });
                                                                 }
                                                             />
-                                                            <span>
+                                                            <span class="truncate">
                                                                 {t.benutzername}
                                                                 {if is_self { " (Du)" } else { "" }}
                                                             </span>
@@ -458,9 +507,9 @@ pub fn ChatSection() -> impl IntoView {
                                                         let btn_class = move || {
                                                             let is_active = active_chat.get().map(|c| c.id == gid).unwrap_or(false);
                                                             if is_active {
-                                                                "w-full text-left px-3 py-2 rounded-lg bg-[#66023C]/10 text-[#66023C] font-semibold transition-colors flex items-center justify-between"
+                                                                "w-full text-left px-3 py-2 rounded-lg bg-[#66023C]/10 text-[#66023C] font-semibold transition-colors flex items-center justify-between gap-2"
                                                             } else {
-                                                                "w-full text-left px-3 py-2 rounded-lg hover:bg-slate-100 text-slate-700 transition-colors flex items-center justify-between"
+                                                                "w-full text-left px-3 py-2 rounded-lg hover:bg-slate-100 text-slate-700 transition-colors flex items-center justify-between gap-2"
                                                             }
                                                         };
 
@@ -469,9 +518,12 @@ pub fn ChatSection() -> impl IntoView {
                                                                 <button
                                                                     type="button"
                                                                     class=btn_class
-                                                                    on:click=move |_| set_active_chat.set(Some(g_clone.clone()))
+                                                                    on:click=move |_| {
+                                                                        set_active_chat.set(Some(g_clone.clone()));
+                                                                        set_mobile_show_list.set(false);
+                                                                    }
                                                                 >
-                                                                    <div class="min-w-0">
+                                                                    <div class="min-w-0 flex-1">
                                                                         <div class="text-sm truncate flex items-center gap-1.5">
                                                                             <span>"👥"</span>
                                                                             <span class="truncate">{g.name}</span>
@@ -480,7 +532,7 @@ pub fn ChatSection() -> impl IntoView {
                                                                             {member_names}
                                                                         </div>
                                                                     </div>
-                                                                    <span class="badge badge-ghost badge-xs">
+                                                                    <span class="badge badge-ghost badge-xs shrink-0">
                                                                         {format!("{}", g.teilnehmer.len())}
                                                                     </span>
                                                                 </button>
@@ -500,7 +552,7 @@ pub fn ChatSection() -> impl IntoView {
 
                         // 2. Bereich: Alle Chatteilnehmer (1:1 Direktchat starten & Übersicht der Teilnehmer)
                         <div class="space-y-2">
-                            <div class="flex items-center justify-between">
+                            <div class="flex items-center justify-between gap-2">
                                 <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500">
                                     "Chatteilnehmer"
                                 </h2>
@@ -551,9 +603,9 @@ pub fn ChatSection() -> impl IntoView {
 
                                                     let row_class = move || {
                                                         if is_direct_partner() {
-                                                            "w-full text-left px-3 py-2 rounded-lg bg-[#66023C]/10 text-[#66023C] font-semibold transition-colors flex items-center justify-between"
+                                                            "w-full text-left px-3 py-2 rounded-lg bg-[#66023C]/10 text-[#66023C] font-semibold transition-colors flex items-center justify-between gap-2"
                                                         } else {
-                                                            "w-full text-left px-3 py-2 rounded-lg hover:bg-slate-100 text-slate-700 transition-colors flex items-center justify-between"
+                                                            "w-full text-left px-3 py-2 rounded-lg hover:bg-slate-100 text-slate-700 transition-colors flex items-center justify-between gap-2"
                                                         }
                                                     };
 
@@ -579,7 +631,7 @@ pub fn ChatSection() -> impl IntoView {
                                                                 </div>
 
                                                                 {move || is_in_active_chat().then(|| view! {
-                                                                    <span class="badge badge-xs bg-[#66023C]/15 text-[#66023C] border-none">
+                                                                    <span class="badge badge-xs bg-[#66023C]/15 text-[#66023C] border-none shrink-0">
                                                                         "Im Chat"
                                                                     </span>
                                                                 })}
@@ -602,13 +654,23 @@ pub fn ChatSection() -> impl IntoView {
                 </div>
 
                 // RECHTE SPALTE: Nachrichtenverlauf + Drag & Drop / Copy & Paste Datei-Upload
+                // Mobile (< md): sichtbar wenn mobile_show_list == false
+                // Tablet (md:): 7/12 Spalten | Laptop (lg:): 8/12 Spalten | Desktop (xl:): 9/12 Spalten
                 <div
                     class=move || {
-                        if is_dragging.get() {
-                            "lg:col-span-8 card bg-base-100 shadow-sm border-2 border-dashed border-[#66023C] bg-[#66023C]/5 flex flex-col transition-all"
+                        let mobile_vis = if !mobile_show_list.get() {
+                            "flex"
                         } else {
-                            "lg:col-span-8 card bg-base-100 shadow-sm border border-base-300 flex flex-col transition-all"
-                        }
+                            "hidden md:flex"
+                        };
+                        let border_style = if is_dragging.get() {
+                            "border-2 border-dashed border-[#66023C] bg-[#66023C]/5"
+                        } else {
+                            "border border-base-300"
+                        };
+                        format!(
+                            "{mobile_vis} md:col-span-7 lg:col-span-8 xl:col-span-9 card bg-base-100 shadow-sm {border_style} flex-col h-full overflow-hidden transition-all"
+                        )
                     }
                     on:dragover=move |ev| {
                         ev.prevent_default();
@@ -619,9 +681,9 @@ pub fn ChatSection() -> impl IntoView {
                     }
                     on:drop=on_drop_files
                 >
-                    <div class="card-body p-4 sm:p-6 flex flex-col flex-1 justify-between space-y-4">
+                    <div class="card-body p-3 sm:p-5 flex flex-col flex-1 h-full overflow-hidden justify-between gap-3">
                         // Kopfbereich des ausgewählten Chats
-                        <div class="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-200">
+                        <div class="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-slate-200 shrink-0">
                             {move || match active_chat.get() {
                                 Some(chat) => {
                                     let teilnehmer_liste = chat
@@ -631,22 +693,32 @@ pub fn ChatSection() -> impl IntoView {
                                         .collect::<Vec<_>>()
                                         .join(", ");
                                     view! {
-                                        <div>
-                                            <div class="flex items-center gap-2">
-                                                <h2 class="text-base sm:text-lg font-bold text-[#66023C]">
-                                                    {chat.name}
-                                                </h2>
-                                                <span class="badge badge-xs sm:badge-sm badge-ghost">
-                                                    {if chat.ist_gruppe { "Gruppenchat" } else { "Direktchat" }}
-                                                </span>
+                                        <div class="flex items-center gap-2 min-w-0 flex-1">
+                                            <button
+                                                type="button"
+                                                class="btn btn-ghost btn-xs md:hidden px-1.5 text-[#66023C]"
+                                                on:click=move |_| set_mobile_show_list.set(true)
+                                                title="Zurück zur Teilnehmerliste"
+                                            >
+                                                "←"
+                                            </button>
+                                            <div class="min-w-0 flex-1">
+                                                <div class="flex items-center gap-2 flex-wrap">
+                                                    <h2 class="text-sm sm:text-base lg:text-lg font-bold text-[#66023C] truncate">
+                                                        {chat.name}
+                                                    </h2>
+                                                    <span class="badge badge-xs sm:badge-sm badge-ghost shrink-0">
+                                                        {if chat.ist_gruppe { "Gruppenchat" } else { "Direktchat" }}
+                                                    </span>
+                                                </div>
+                                                <p class="text-[11px] sm:text-xs text-slate-500 truncate">
+                                                    {format!("Teilnehmer: {teilnehmer_liste}")}
+                                                </p>
                                             </div>
-                                            <p class="text-xs text-slate-500">
-                                                {format!("Teilnehmer: {teilnehmer_liste}")}
-                                            </p>
                                         </div>
                                         <button
                                             type="button"
-                                            class="btn btn-ghost btn-xs text-slate-500"
+                                            class="btn btn-ghost btn-xs text-slate-500 shrink-0"
                                             on:click=move |_| nachrichten_resource.refetch()
                                             title="Nachrichten aktualisieren"
                                         >
@@ -655,13 +727,22 @@ pub fn ChatSection() -> impl IntoView {
                                     }.into_any()
                                 }
                                 None => view! {
-                                    <div>
-                                        <h2 class="text-base sm:text-lg font-semibold text-slate-500">
-                                            "Kein Chat ausgewählt"
-                                        </h2>
-                                        <p class="text-xs text-slate-400">
-                                            "Wähle links einen Chatteilnehmer oder erstelle einen Gruppenchat."
-                                        </p>
+                                    <div class="flex items-center gap-2">
+                                        <button
+                                            type="button"
+                                            class="btn btn-ghost btn-xs md:hidden px-1.5 text-[#66023C]"
+                                            on:click=move |_| set_mobile_show_list.set(true)
+                                        >
+                                            "← Teilnehmer"
+                                        </button>
+                                        <div>
+                                            <h2 class="text-sm sm:text-base font-semibold text-slate-500">
+                                                "Kein Chat ausgewählt"
+                                            </h2>
+                                            <p class="text-xs text-slate-400">
+                                                "Wähle einen Chatteilnehmer oder erstelle einen Gruppenchat."
+                                            </p>
+                                        </div>
                                     </div>
                                 }.into_any(),
                             }}
@@ -669,13 +750,13 @@ pub fn ChatSection() -> impl IntoView {
 
                         // Drag & Drop Hinweis-Banner wenn Datei gezogen wird
                         {move || is_dragging.get().then(|| view! {
-                            <div class="p-4 rounded-xl bg-[#66023C]/10 border border-[#66023C] text-[#66023C] text-center text-sm font-semibold">
+                            <div class="p-3 rounded-xl bg-[#66023C]/10 border border-[#66023C] text-[#66023C] text-center text-xs sm:text-sm font-semibold shrink-0">
                                 "📂 Bilder oder Dokumente hier loslassen, um sie anzuhängen"
                             </div>
                         })}
 
-                        // Nachrichtenliste
-                        <div class="flex-1 overflow-y-auto space-y-3 max-h-[420px] min-h-[300px] pr-1">
+                        // Nachrichtenliste (flex-1 füllt den gesamten verfügbaren vertikalen & horizontalen Platz)
+                        <div class="flex-1 overflow-y-auto space-y-3 pr-1 min-h-0">
                             <Suspense fallback=move || view! {
                                 <div class="flex justify-center p-8">
                                     <span class="loading loading-spinner loading-md text-primary"></span>
@@ -684,8 +765,8 @@ pub fn ChatSection() -> impl IntoView {
                                 {move || {
                                     if active_chat.get().is_none() {
                                         return view! {
-                                            <div class="h-full flex items-center justify-center text-slate-400 text-sm py-16 text-center">
-                                                "Klicke links auf einen Chatteilnehmer oder Gruppenchat, um Nachrichten anzuzeigen."
+                                            <div class="h-full flex items-center justify-center text-slate-400 text-xs sm:text-sm py-12 text-center px-4">
+                                                "Klicke auf einen Chatteilnehmer oder Gruppenchat, um Nachrichten anzuzeigen."
                                             </div>
                                         }.into_any();
                                     }
@@ -699,7 +780,7 @@ pub fn ChatSection() -> impl IntoView {
                                         Ok(msgs) => {
                                             if msgs.is_empty() {
                                                 view! {
-                                                    <div class="h-full flex flex-col items-center justify-center text-slate-400 text-sm py-16 space-y-1 text-center">
+                                                    <div class="h-full flex flex-col items-center justify-center text-slate-400 text-xs sm:text-sm py-12 space-y-1 text-center px-4">
                                                         <p class="font-medium">"Noch keine Nachrichten in diesem Chat."</p>
                                                         <p class="text-xs">"Schreibe eine Nachricht oder ziehe Bilder & Dokumente per Drag & Drop / Copy & Paste hierher."</p>
                                                     </div>
@@ -715,9 +796,9 @@ pub fn ChatSection() -> impl IntoView {
                                                                 "flex flex-col items-start"
                                                             };
                                                             let bubble_class = if is_mine {
-                                                                "max-w-[85%] sm:max-w-[75%] rounded-2xl px-4 py-2.5 bg-[#66023C] text-white shadow-xs space-y-2"
+                                                                "max-w-[92%] sm:max-w-[80%] xl:max-w-[70%] rounded-2xl px-3.5 sm:px-4 py-2 sm:py-2.5 bg-[#66023C] text-white shadow-xs space-y-2"
                                                             } else {
-                                                                "max-w-[85%] sm:max-w-[75%] rounded-2xl px-4 py-2.5 bg-slate-100 text-slate-800 border border-slate-200 shadow-xs space-y-2"
+                                                                "max-w-[92%] sm:max-w-[80%] xl:max-w-[70%] rounded-2xl px-3.5 sm:px-4 py-2 sm:py-2.5 bg-slate-100 text-slate-800 border border-slate-200 shadow-xs space-y-2"
                                                             };
 
                                                             let is_image = m
@@ -735,7 +816,7 @@ pub fn ChatSection() -> impl IntoView {
                                                                     </div>
                                                                     <div class=bubble_class>
                                                                         {(!m.inhalt.is_empty()).then(|| view! {
-                                                                            <p class="text-sm whitespace-pre-wrap break-words">{m.inhalt}</p>
+                                                                            <p class="text-xs sm:text-sm whitespace-pre-wrap break-words">{m.inhalt}</p>
                                                                         })}
 
                                                                         {m.anhang_daten.map(|daten| {
@@ -747,15 +828,15 @@ pub fn ChatSection() -> impl IntoView {
                                                                                             <img
                                                                                                 src=daten.clone()
                                                                                                 alt=dateiname.clone()
-                                                                                                class="max-h-60 rounded-lg object-contain border border-white/20 bg-white"
+                                                                                                class="max-h-56 sm:max-h-72 lg:max-h-80 w-auto rounded-lg object-contain border border-white/20 bg-white"
                                                                                             />
                                                                                         </a>
-                                                                                        <div class="flex items-center justify-between text-[11px] opacity-85">
-                                                                                            <span class="truncate max-w-[180px]">{dateiname.clone()}</span>
+                                                                                        <div class="flex items-center justify-between text-[11px] opacity-85 gap-2">
+                                                                                            <span class="truncate max-w-[160px] sm:max-w-[260px]">{dateiname.clone()}</span>
                                                                                             <a
                                                                                                 href=daten
                                                                                                 download=dateiname
-                                                                                                class="underline font-medium ml-2"
+                                                                                                class="underline font-medium shrink-0"
                                                                                             >
                                                                                                 "Download"
                                                                                             </a>
@@ -764,9 +845,9 @@ pub fn ChatSection() -> impl IntoView {
                                                                                 }.into_any()
                                                                             } else {
                                                                                 view! {
-                                                                                    <div class="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-black/15 text-xs">
+                                                                                    <div class="flex items-center justify-between gap-2 sm:gap-3 p-2 sm:p-2.5 rounded-xl bg-black/15 text-xs">
                                                                                         <div class="flex items-center gap-2 min-w-0">
-                                                                                            <span class="text-base">"📄"</span>
+                                                                                            <span class="text-base shrink-0">"📄"</span>
                                                                                             <span class="font-medium truncate">{dateiname.clone()}</span>
                                                                                         </div>
                                                                                         <a
@@ -802,21 +883,21 @@ pub fn ChatSection() -> impl IntoView {
                         {move || {
                             let list = pending_anhaenge.get();
                             (!list.is_empty()).then(|| view! {
-                                <div class="flex flex-wrap gap-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                                <div class="flex flex-wrap gap-2 p-2 rounded-xl bg-slate-50 border border-slate-200 max-h-28 overflow-y-auto shrink-0">
                                     {list.into_iter().enumerate().map(|(idx, item)| {
                                         let is_img = item.typ.starts_with("image/");
                                         view! {
-                                            <div class="flex items-center gap-2 bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 shadow-2xs text-xs">
+                                            <div class="flex items-center gap-2 bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-2xs text-xs">
                                                 {if is_img {
                                                     view! {
-                                                        <img src=item.daten class="w-8 h-8 object-cover rounded" alt=item.name.clone() />
+                                                        <img src=item.daten class="w-7 h-7 object-cover rounded shrink-0" alt=item.name.clone() />
                                                     }.into_any()
                                                 } else {
                                                     view! {
-                                                        <span class="text-base">"📎"</span>
+                                                        <span class="text-base shrink-0">"📎"</span>
                                                     }.into_any()
                                                 }}
-                                                <span class="max-w-[140px] truncate font-medium text-slate-700">
+                                                <span class="max-w-[120px] sm:max-w-[180px] truncate font-medium text-slate-700">
                                                     {item.name}
                                                 </span>
                                                 <button
@@ -839,14 +920,15 @@ pub fn ChatSection() -> impl IntoView {
                             })
                         }}
 
-                        // Eingabezeile (mit Copy & Paste, Drag & Drop und Datei-Auswahl-Button)
-                        <form on:submit=on_send_submit class="pt-2 border-t border-slate-200 space-y-2">
-                            <div class="flex items-center gap-2">
+                        // Eingabezeile (responsiv für Mobile, Tablet & Desktop)
+                        <form on:submit=on_send_submit class="pt-2 border-t border-slate-200 space-y-1.5 shrink-0">
+                            <div class="flex items-center gap-1.5 sm:gap-2">
                                 <label
-                                    class="btn btn-outline btn-sm border-slate-300 text-slate-700 hover:bg-[#66023C] hover:text-white hover:border-[#66023C] cursor-pointer shrink-0"
+                                    class="btn btn-outline btn-sm border-slate-300 text-slate-700 hover:bg-[#66023C] hover:text-white hover:border-[#66023C] cursor-pointer shrink-0 px-2.5 sm:px-3"
                                     title="Bilder oder Dokumente auswählen"
                                 >
-                                    <span>"📎 Datei / Bild"</span>
+                                    <span>"📎"</span>
+                                    <span class="hidden sm:inline">"Datei / Bild"</span>
                                     <input
                                         type="file"
                                         multiple
@@ -857,8 +939,8 @@ pub fn ChatSection() -> impl IntoView {
 
                                 <input
                                     type="text"
-                                    placeholder="Nachricht schreiben oder Bild/Dokument per Cmd+V einfügen..."
-                                    class="input input-bordered input-sm flex-1"
+                                    placeholder="Nachricht schreiben oder Datei per Cmd+V einfügen..."
+                                    class="input input-bordered input-sm flex-1 min-w-0"
                                     prop:value=move || nachricht_text.get()
                                     on:input=move |ev| set_nachricht_text.set(event_target_value(&ev))
                                     on:paste=on_paste_files
@@ -867,13 +949,13 @@ pub fn ChatSection() -> impl IntoView {
 
                                 <button
                                     type="submit"
-                                    class="btn btn-primary btn-sm shrink-0"
+                                    class="btn btn-primary btn-sm shrink-0 px-3 sm:px-4"
                                     disabled=move || active_chat.get().is_none() || send_action.pending().get()
                                 >
                                     "Senden"
                                 </button>
                             </div>
-                            <div class="text-[11px] text-slate-400 flex items-center justify-between px-1">
+                            <div class="hidden sm:flex text-[11px] text-slate-400 items-center justify-between px-1">
                                 <span>"Tipp: Bilder & Dokumente einfach per Drag & Drop in das Chatfenster ziehen oder per Copy & Paste (Cmd+V / Strg+V) einfügen."</span>
                             </div>
                         </form>
