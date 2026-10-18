@@ -36,4 +36,6 @@ pub fn register_server_functions() {
     register_explicit::<chat::CreateGroupChat>();
     register_explicit::<chat::GetChatNachrichten>();
     register_explicit::<chat::SendChatNachricht>();
+    register_explicit::<chat::ChatLiveAbfrage>();
+    register_explicit::<chat::SetChatTippstatus>();
 }
