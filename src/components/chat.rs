@@ -213,8 +213,9 @@ fn tipp_text(namen: &[String]) -> String {
     }
 }
 
-const LISTEN_ZEILE_AKTIV: &str = "w-full text-left px-3 py-3 md:py-2 min-h-16 md:min-h-0 rounded-xl bg-[#66023C]/10 text-[#66023C] font-semibold transition-colors flex items-center gap-3";
-const LISTEN_ZEILE: &str = "w-full text-left px-3 py-3 md:py-2 min-h-16 md:min-h-0 rounded-xl hover:bg-slate-100 active:bg-slate-200 text-slate-700 transition-colors flex items-center gap-3";
+// Zeilen der DaisyUI-Listen (`list` / `list-row`) für Gruppen und Chatteilnehmer
+const LISTEN_ZEILE_AKTIV: &str = "list-row w-full text-left items-center gap-3 px-4 py-3 md:py-2.5 cursor-pointer bg-[#66023C]/10 text-[#66023C] transition-colors";
+const LISTEN_ZEILE: &str = "list-row w-full text-left items-center gap-3 px-4 py-3 md:py-2.5 cursor-pointer hover:bg-base-200 active:bg-base-300 transition-colors";
 
 #[component]
 pub fn ChatSection() -> impl IntoView {
@@ -564,18 +565,16 @@ pub fn ChatSection() -> impl IntoView {
                 // LINKE SPALTE: Gruppenchats & Chatteilnehmer
                 <div class=move || {
                     if mobile_show_list.get() {
-                        "flex md:col-span-5 lg:col-span-4 xl:col-span-3 card bg-base-100 shadow-sm border border-base-300 flex-col h-full overflow-hidden"
+                        "flex md:col-span-5 lg:col-span-4 card bg-base-100 shadow-sm border border-base-300 flex-col h-full overflow-hidden"
                     } else {
-                        "hidden md:flex md:col-span-5 lg:col-span-4 xl:col-span-3 card bg-base-100 shadow-sm border border-base-300 flex-col h-full overflow-hidden"
+                        "hidden md:flex md:col-span-5 lg:col-span-4 card bg-base-100 shadow-sm border border-base-300 flex-col h-full overflow-hidden"
                     }
                 }>
-                    <div class="flex-1 overflow-y-auto p-2 sm:p-3 space-y-4">
-                        // 1. Bereich: Gruppenchats + Button zum Erstellen
-                        <div class="space-y-1.5">
-                            <div class="flex items-center justify-between gap-2 px-1 pt-1">
-                                <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500">
-                                    "Gruppenchats"
-                                </h2>
+                    <div class="flex-1 overflow-y-auto">
+                        // 1. Liste: Gruppenchats (DaisyUI list)
+                        <ul class="list">
+                            <li class="px-4 pt-4 pb-2 flex items-center justify-between gap-2">
+                                <span class="text-xs font-semibold uppercase tracking-wide opacity-60">"Gruppenchats"</span>
                                 <button
                                     type="button"
                                     class="btn btn-md md:btn-sm min-h-11 md:min-h-0 rounded-full bg-[#66023C] hover:bg-[#7A2048] text-white border-none px-4"
@@ -583,80 +582,80 @@ pub fn ChatSection() -> impl IntoView {
                                 >
                                     {move || if show_group_form.get() { "Abbrechen" } else { "+ Gruppe" }}
                                 </button>
-                            </div>
+                            </li>
 
                             // Formular zum Erstellen eines neuen Gruppenchats
                             {move || show_group_form.get().then(|| view! {
-                                <form
-                                    on:submit=on_create_group_submit
-                                    class="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-3"
-                                >
-                                    <label class="block space-y-1">
-                                        <span class="text-xs font-semibold text-slate-600">"Gruppenname"</span>
-                                        <input
-                                            type="text"
-                                            placeholder="z.B. Haushalt, Projekt, Familie..."
-                                            class="input input-bordered input-md md:input-sm w-full text-base md:text-sm"
-                                            prop:value=move || group_name.get()
-                                            on:input=move |ev| set_group_name.set(event_target_value(&ev))
-                                            required
-                                        />
-                                    </label>
-
-                                    <div>
-                                        <div class="text-xs font-semibold mb-1 text-slate-600">
-                                            "Teilnehmer auswählen:"
-                                        </div>
-                                        <div class="max-h-48 md:max-h-32 overflow-y-auto pr-1">
-                                            {move || uebersicht_resource.get().and_then(|r| r.ok()).map(|ueb| {
-                                                let my_id = ueb.aktueller_benutzer_id;
-                                                ueb.alle_teilnehmer.into_iter().map(|t| {
-                                                    let uid = t.id;
-                                                    let is_self = uid == my_id;
-                                                    let checked = move || is_self || selected_group_members.get().contains(&uid);
-                                                    view! {
-                                                        <label class="flex items-center gap-3 text-sm md:text-xs cursor-pointer py-2 md:py-1 px-1 rounded-lg hover:bg-white">
-                                                            <input
-                                                                type="checkbox"
-                                                                class="checkbox checkbox-md md:checkbox-xs checkbox-primary"
-                                                                prop:checked=checked
-                                                                disabled=is_self
-                                                                on:change=move |ev| {
-                                                                    let is_checked = event_target_checked(&ev);
-                                                                    set_selected_group_members.update(|list| {
-                                                                        if is_checked {
-                                                                            if !list.contains(&uid) {
-                                                                                list.push(uid);
-                                                                            }
-                                                                        } else {
-                                                                            list.retain(|x| *x != uid);
-                                                                        }
-                                                                    });
-                                                                }
-                                                            />
-                                                            <span class="truncate">
-                                                                {t.benutzername}
-                                                                {if is_self { " (Du)" } else { "" }}
-                                                            </span>
-                                                        </label>
-                                                    }
-                                                }).collect_view()
-                                            })}
-                                        </div>
-                                    </div>
-
-                                    <button
-                                        type="submit"
-                                        class="btn btn-primary btn-md md:btn-sm min-h-11 md:min-h-0 w-full"
-                                        disabled=move || create_group_action.pending().get()
+                                <li class="px-3 pb-3">
+                                    <form
+                                        on:submit=on_create_group_submit
+                                        class="p-3 rounded-box bg-base-200 space-y-3"
                                     >
-                                        "Gruppenchat erstellen"
-                                    </button>
-                                </form>
+                                        <label class="block space-y-1">
+                                            <span class="text-xs font-semibold opacity-70">"Gruppenname"</span>
+                                            <input
+                                                type="text"
+                                                placeholder="z.B. Haushalt, Projekt, Familie..."
+                                                class="input input-bordered input-md md:input-sm w-full text-base md:text-sm"
+                                                prop:value=move || group_name.get()
+                                                on:input=move |ev| set_group_name.set(event_target_value(&ev))
+                                                required
+                                            />
+                                        </label>
+
+                                        <div>
+                                            <div class="text-xs font-semibold mb-1 opacity-70">"Teilnehmer auswählen:"</div>
+                                            <div class="max-h-48 md:max-h-32 overflow-y-auto pr-1">
+                                                {move || uebersicht_resource.get().and_then(|r| r.ok()).map(|ueb| {
+                                                    let my_id = ueb.aktueller_benutzer_id;
+                                                    ueb.alle_teilnehmer.into_iter().map(|t| {
+                                                        let uid = t.id;
+                                                        let is_self = uid == my_id;
+                                                        let checked = move || is_self || selected_group_members.get().contains(&uid);
+                                                        view! {
+                                                            <label class="flex items-center gap-3 text-sm md:text-xs cursor-pointer py-2 md:py-1 px-1 rounded-lg hover:bg-base-100">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    class="checkbox checkbox-md md:checkbox-xs checkbox-primary"
+                                                                    prop:checked=checked
+                                                                    disabled=is_self
+                                                                    on:change=move |ev| {
+                                                                        let is_checked = event_target_checked(&ev);
+                                                                        set_selected_group_members.update(|list| {
+                                                                            if is_checked {
+                                                                                if !list.contains(&uid) {
+                                                                                    list.push(uid);
+                                                                                }
+                                                                            } else {
+                                                                                list.retain(|x| *x != uid);
+                                                                            }
+                                                                        });
+                                                                    }
+                                                                />
+                                                                <span class="truncate">
+                                                                    {t.benutzername}
+                                                                    {if is_self { " (Du)" } else { "" }}
+                                                                </span>
+                                                            </label>
+                                                        }
+                                                    }).collect_view()
+                                                })}
+                                            </div>
+                                        </div>
+
+                                        <button
+                                            type="submit"
+                                            class="btn btn-primary btn-md md:btn-sm min-h-11 md:min-h-0 w-full"
+                                            disabled=move || create_group_action.pending().get()
+                                        >
+                                            "Gruppenchat erstellen"
+                                        </button>
+                                    </form>
+                                </li>
                             })}
 
                             <Suspense fallback=move || view! {
-                                <div class="text-xs text-slate-400 py-2 px-1">"Lade Chats..."</div>
+                                <li class="px-4 py-2 text-xs opacity-60">"Lade Chats..."</li>
                             }>
                                 {move || uebersicht_resource.get().map(|res| match res {
                                     Ok(ueb) => {
@@ -667,161 +666,143 @@ pub fn ChatSection() -> impl IntoView {
                                             .collect();
 
                                         if gruppen.is_empty() {
-                                            view! {
-                                                <div class="text-xs text-slate-400 italic py-1 px-1">
+                                            return view! {
+                                                <li class="px-4 pb-3 text-sm italic opacity-50">
                                                     "Noch kein Gruppenchat vorhanden."
-                                                </div>
-                                            }.into_any()
-                                        } else {
-                                            view! {
-                                                <ul class="space-y-0.5">
-                                                    {gruppen.into_iter().map(|g| {
-                                                        let g_clone = g.clone();
-                                                        let gid = g.id;
-                                                        let member_names = g
-                                                            .teilnehmer
-                                                            .iter()
-                                                            .map(|t| t.benutzername.as_str())
-                                                            .collect::<Vec<_>>()
-                                                            .join(", ");
-
-                                                        let btn_class = move || {
-                                                            if active_chat_id.get() == Some(gid) {
-                                                                LISTEN_ZEILE_AKTIV
-                                                            } else {
-                                                                LISTEN_ZEILE
-                                                            }
-                                                        };
-
-                                                        view! {
-                                                            <li>
-                                                                <button
-                                                                    type="button"
-                                                                    class=btn_class
-                                                                    on:click=move |_| {
-                                                                        set_active_chat.set(Some(g_clone.clone()));
-                                                                        set_mobile_show_list.set(false);
-                                                                    }
-                                                                >
-                                                                    <div class="w-11 h-11 md:w-9 md:h-9 rounded-full bg-[#7A2048]/15 text-[#66023C] flex items-center justify-center shrink-0">
-                                                                        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                                                            <path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                                        </svg>
-                                                                    </div>
-                                                                    <div class="min-w-0 flex-1">
-                                                                        <div class="text-base md:text-sm truncate">{g.name}</div>
-                                                                        <div class="text-xs md:text-[11px] text-slate-400 font-normal truncate">
-                                                                            {member_names}
-                                                                        </div>
-                                                                    </div>
-                                                                    <span class="badge badge-ghost badge-sm shrink-0">
-                                                                        {format!("{}", g.teilnehmer.len())}
-                                                                    </span>
-                                                                    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-slate-300 shrink-0 md:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                                                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
-                                                                    </svg>
-                                                                </button>
-                                                            </li>
-                                                        }
-                                                    }).collect_view()}
-                                                </ul>
-                                            }.into_any()
+                                                </li>
+                                            }.into_any();
                                         }
+                                        gruppen.into_iter().map(|g| {
+                                            let g_clone = g.clone();
+                                            let gid = g.id;
+                                            let member_names = g
+                                                .teilnehmer
+                                                .iter()
+                                                .map(|t| t.benutzername.as_str())
+                                                .collect::<Vec<_>>()
+                                                .join(", ");
+                                            let row_class = move || {
+                                                if active_chat_id.get() == Some(gid) { LISTEN_ZEILE_AKTIV } else { LISTEN_ZEILE }
+                                            };
+
+                                            view! {
+                                                <li>
+                                                    <button
+                                                        type="button"
+                                                        class=row_class
+                                                        on:click=move |_| {
+                                                            set_active_chat.set(Some(g_clone.clone()));
+                                                            set_mobile_show_list.set(false);
+                                                        }
+                                                    >
+                                                        <div class="avatar avatar-placeholder">
+                                                            <div class="w-11 md:w-10 rounded-full bg-[#7A2048]/15 text-[#66023C]">
+                                                                <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                                </svg>
+                                                            </div>
+                                                        </div>
+                                                        <div class="list-col-grow min-w-0">
+                                                            <div class="text-base md:text-sm font-semibold truncate">{g.name}</div>
+                                                            <div class="text-xs opacity-60 truncate">{member_names}</div>
+                                                        </div>
+                                                        <span class="badge badge-ghost badge-sm">
+                                                            {format!("{}", g.teilnehmer.len())}
+                                                        </span>
+                                                    </button>
+                                                </li>
+                                            }
+                                        }).collect_view().into_any()
                                     }
-                                    Err(_) => view! { <div></div> }.into_any(),
+                                    Err(_) => ().into_any(),
                                 })}
                             </Suspense>
-                        </div>
+                        </ul>
 
-                        <div class="border-t border-slate-100"></div>
-
-                        // 2. Bereich: Alle Chatteilnehmer (Klick öffnet den Direktchat)
-                        <div class="space-y-1.5">
-                            <div class="flex items-center justify-between gap-2 px-1">
-                                <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500">
-                                    "Chatteilnehmer"
-                                </h2>
-                                <span class="text-[11px] text-slate-400">
-                                    "Antippen für Direktchat"
-                                </span>
-                            </div>
+                        // 2. Liste: Alle Chatteilnehmer (DaisyUI list, Antippen öffnet den Direktchat)
+                        <ul class="list mt-2">
+                            <li class="px-4 pt-3 pb-2 flex items-center justify-between gap-2">
+                                <span class="text-xs font-semibold uppercase tracking-wide opacity-60">"Chatteilnehmer"</span>
+                                <span class="text-[11px] opacity-50 md:hidden">"Antippen für Direktchat"</span>
+                            </li>
 
                             <Suspense fallback=move || view! {
-                                <div class="flex justify-center p-4">
+                                <li class="flex justify-center p-4">
                                     <span class="loading loading-spinner loading-sm text-primary"></span>
-                                </div>
+                                </li>
                             }>
                                 {move || uebersicht_resource.get().map(|res| match res {
                                     Ok(ueb) => {
                                         let my_id = ueb.aktueller_benutzer_id;
-                                        view! {
-                                            <ul class="space-y-0.5">
-                                                {ueb.alle_teilnehmer.into_iter().map(|teilnehmer| {
-                                                    let tid = teilnehmer.id;
-                                                    let tname = teilnehmer.benutzername.clone();
-                                                    let initial = initiale(&tname);
-                                                    let is_self = tid == my_id;
+                                        ueb.alle_teilnehmer.into_iter().map(|teilnehmer| {
+                                            let tid = teilnehmer.id;
+                                            let tname = teilnehmer.benutzername.clone();
+                                            let initial = initiale(&tname);
+                                            let is_self = tid == my_id;
 
-                                                    let is_direct_partner = move || {
-                                                        active_chat
-                                                            .get()
-                                                            .map(|c| {
-                                                                !c.ist_gruppe && (
-                                                                    (is_self && c.teilnehmer.len() == 1 && c.teilnehmer[0].id == my_id)
-                                                                    || (!is_self && c.teilnehmer.iter().any(|m| m.id == tid))
-                                                                )
-                                                            })
-                                                            .unwrap_or(false)
-                                                    };
+                                            let is_direct_partner = move || {
+                                                active_chat
+                                                    .get()
+                                                    .map(|c| {
+                                                        !c.ist_gruppe && (
+                                                            (is_self && c.teilnehmer.len() == 1 && c.teilnehmer[0].id == my_id)
+                                                            || (!is_self && c.teilnehmer.iter().any(|m| m.id == tid))
+                                                        )
+                                                    })
+                                                    .unwrap_or(false)
+                                            };
+                                            let row_class = move || {
+                                                if is_direct_partner() { LISTEN_ZEILE_AKTIV } else { LISTEN_ZEILE }
+                                            };
+                                            let wird_geoeffnet = move || {
+                                                oeffne_partner.get() == Some(tid) && open_direct_action.pending().get()
+                                            };
 
-                                                    let row_class = move || {
-                                                        if is_direct_partner() { LISTEN_ZEILE_AKTIV } else { LISTEN_ZEILE }
-                                                    };
-                                                    let wird_geoeffnet = move || {
-                                                        oeffne_partner.get() == Some(tid) && open_direct_action.pending().get()
-                                                    };
-
-                                                    view! {
-                                                        <li>
-                                                            <button
-                                                                type="button"
-                                                                class=row_class
-                                                                on:click=move |_| {
-                                                                    set_oeffne_partner.set(Some(tid));
-                                                                    open_direct_action.dispatch(tid);
-                                                                }
-                                                            >
-                                                                <div class="w-11 h-11 md:w-9 md:h-9 rounded-full bg-[#66023C] text-white flex items-center justify-center text-sm font-bold shrink-0">
-                                                                    {initial}
-                                                                </div>
-                                                                <div class="min-w-0 flex-1 text-base md:text-sm truncate">
-                                                                    {tname}
-                                                                    {if is_self { " (Du)" } else { "" }}
-                                                                </div>
-                                                                {move || if wird_geoeffnet() {
-                                                                    view! { <span class="loading loading-spinner loading-sm text-[#66023C] shrink-0"></span> }.into_any()
-                                                                } else {
-                                                                    view! {
-                                                                        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-slate-300 shrink-0 md:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                                                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
-                                                                        </svg>
-                                                                    }.into_any()
-                                                                }}
-                                                            </button>
-                                                        </li>
-                                                    }
-                                                }).collect_view()}
-                                            </ul>
-                                        }.into_any()
+                                            view! {
+                                                <li>
+                                                    <button
+                                                        type="button"
+                                                        class=row_class
+                                                        on:click=move |_| {
+                                                            set_oeffne_partner.set(Some(tid));
+                                                            open_direct_action.dispatch(tid);
+                                                        }
+                                                    >
+                                                        <div class="avatar avatar-placeholder">
+                                                            <div class="w-11 md:w-10 rounded-full bg-[#66023C] text-white">
+                                                                <span class="text-sm font-bold">{initial}</span>
+                                                            </div>
+                                                        </div>
+                                                        <div class="list-col-grow min-w-0">
+                                                            <div class="text-base md:text-sm font-semibold truncate">{tname}</div>
+                                                            <div class="text-xs opacity-60">
+                                                                {if is_self { "Du · Notizen" } else { "Direktchat" }}
+                                                            </div>
+                                                        </div>
+                                                        {move || if wird_geoeffnet() {
+                                                            view! { <span class="loading loading-spinner loading-sm text-[#66023C]"></span> }.into_any()
+                                                        } else {
+                                                            view! {
+                                                                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+                                                                </svg>
+                                                            }.into_any()
+                                                        }}
+                                                    </button>
+                                                </li>
+                                            }
+                                        }).collect_view().into_any()
                                     }
                                     Err(e) => view! {
-                                        <div class="alert alert-error text-xs">
-                                            <span>{format!("Fehler: {e}")}</span>
-                                        </div>
+                                        <li class="px-3 pb-3">
+                                            <div class="alert alert-error text-xs">
+                                                <span>{format!("Fehler: {e}")}</span>
+                                            </div>
+                                        </li>
                                     }.into_any(),
                                 })}
                             </Suspense>
-                        </div>
+                        </ul>
                     </div>
                 </div>
 
@@ -835,7 +816,7 @@ pub fn ChatSection() -> impl IntoView {
                             "border border-base-300"
                         };
                         format!(
-                            "{mobile_vis} md:col-span-7 lg:col-span-8 xl:col-span-9 card bg-base-100 shadow-sm {border_style} flex-col h-full overflow-hidden transition-all"
+                            "{mobile_vis} md:col-span-7 lg:col-span-8 card bg-base-100 shadow-sm {border_style} flex-col h-full overflow-hidden transition-all"
                         )
                     }
                     on:dragover=move |ev| {
