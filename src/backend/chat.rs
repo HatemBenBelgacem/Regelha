@@ -31,6 +31,14 @@ pub struct ChatNachricht {
     pub zeitpunkt: String,
 }
 
+/// Antwort der Live-Abfrage: neue Nachrichten seit der zuletzt bekannten und wer gerade tippt.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChatLiveStatus {
+    pub nachrichten_version: u64,
+    pub neue_nachrichten: Vec<ChatNachricht>,
+    pub tippende: Vec<String>,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChatUebersicht {
     pub aktueller_benutzer_id: Uuid,
@@ -62,6 +70,176 @@ mod store {
         LazyLock::new(|| Mutex::new(Vec::new()));
     pub static NACHRICHTEN_MEMORY: LazyLock<Mutex<Vec<ChatNachricht>>> =
         LazyLock::new(|| Mutex::new(Vec::new()));
+}
+
+/// Prozessweiter Live-Zustand für Echtzeit-Updates (neue Nachrichten & Tipp-Anzeige).
+/// Wartende Live-Abfragen werden über den `watch`-Kanal geweckt, sobald sich etwas ändert.
+#[cfg(feature = "ssr")]
+mod live {
+    use super::*;
+    use std::collections::HashMap;
+    use std::sync::{LazyLock, Mutex};
+    use std::time::{Duration, Instant};
+    use tokio::sync::watch;
+
+    /// Wie lange ein Tipp-Signal ohne Erneuerung gültig bleibt.
+    pub const TIPP_TIMEOUT: Duration = Duration::from_secs(5);
+
+    pub static SIGNAL: LazyLock<watch::Sender<u64>> = LazyLock::new(|| watch::Sender::new(0));
+    static VERSIONEN: LazyLock<Mutex<HashMap<Uuid, u64>>> =
+        LazyLock::new(|| Mutex::new(HashMap::new()));
+    static TIPPEN: LazyLock<Mutex<HashMap<Uuid, HashMap<Uuid, (String, Instant)>>>> =
+        LazyLock::new(|| Mutex::new(HashMap::new()));
+
+    fn wecken() {
+        SIGNAL.send_modify(|v| *v = v.wrapping_add(1));
+    }
+
+    pub fn version(chat_id: Uuid) -> u64 {
+        VERSIONEN
+            .lock()
+            .map(|g| g.get(&chat_id).copied().unwrap_or(0))
+            .unwrap_or(0)
+    }
+
+    /// Neue Nachricht im Chat: Version erhöhen, Tipp-Status des Absenders löschen, Wartende wecken.
+    pub fn nachricht_gesendet(chat_id: Uuid, benutzer_id: Uuid) {
+        if let Ok(mut g) = VERSIONEN.lock() {
+            *g.entry(chat_id).or_insert(0) += 1;
+        }
+        if let Ok(mut g) = TIPPEN.lock() {
+            if let Some(chat) = g.get_mut(&chat_id) {
+                chat.remove(&benutzer_id);
+            }
+        }
+        wecken();
+    }
+
+    pub fn setze_tippen(chat_id: Uuid, benutzer_id: Uuid, benutzername: String, tippt: bool) {
+        if let Ok(mut g) = TIPPEN.lock() {
+            let chat = g.entry(chat_id).or_default();
+            if tippt {
+                chat.insert(benutzer_id, (benutzername, Instant::now()));
+            } else {
+                chat.remove(&benutzer_id);
+            }
+        }
+        wecken();
+    }
+
+    /// Alle Benutzer (außer `ich`), die im Chat gerade tippen – alphabetisch sortiert.
+    pub fn tippende(chat_id: Uuid, ich: Uuid) -> Vec<String> {
+        let Ok(mut g) = TIPPEN.lock() else {
+            return Vec::new();
+        };
+        let Some(chat) = g.get_mut(&chat_id) else {
+            return Vec::new();
+        };
+        chat.retain(|_, (_, seit)| seit.elapsed() < TIPP_TIMEOUT);
+        let mut namen: Vec<String> = chat
+            .iter()
+            .filter(|(id, _)| **id != ich)
+            .map(|(_, (name, _))| name.clone())
+            .collect();
+        namen.sort();
+        namen
+    }
+}
+
+#[cfg(feature = "ssr")]
+async fn ist_chat_mitglied(chat_id: Uuid, benutzer_id: Uuid) -> Result<bool, ServerFnError> {
+    use sqlx::PgPool;
+
+    if let Some(pool) = use_context::<PgPool>() {
+        return Ok(sqlx::query(
+            "SELECT 1 FROM rel_benutzer_chat WHERE chat_id = $1 AND benutzer_id = $2",
+        )
+        .bind(chat_id)
+        .bind(benutzer_id)
+        .fetch_optional(&pool)
+        .await
+        .map_err(|e| ServerFnError::new(format!("DB-Fehler: {e}")))?
+        .is_some());
+    }
+
+    let rel_guard = store::REL_BENUTZER_CHAT_MEMORY
+        .lock()
+        .map_err(|_| ServerFnError::new("Speicher-Lock fehlgeschlagen"))?;
+    Ok(rel_guard
+        .iter()
+        .any(|r| r.chat_id == chat_id && r.benutzer_id == benutzer_id))
+}
+
+/// Lädt die Nachrichten eines Chats – alle, oder nur die nach `nach_id` (für Live-Updates).
+#[cfg(feature = "ssr")]
+async fn lade_nachrichten(
+    chat_id: Uuid,
+    nach_id: Option<Uuid>,
+) -> Result<Vec<ChatNachricht>, ServerFnError> {
+    use sqlx::{PgPool, Row};
+
+    if let Some(pool) = use_context::<PgPool>() {
+        let rows = sqlx::query(
+            r#"
+            SELECT
+                n.id,
+                n.chat_id,
+                n.benutzer_id,
+                u.benutzername,
+                n.inhalt,
+                n.anhang_name,
+                n.anhang_typ,
+                n.anhang_daten,
+                n.erstellt_am
+            FROM nachricht n
+            INNER JOIN benutzer u ON n.benutzer_id = u.id
+            WHERE n.chat_id = $1
+              AND (
+                $2::uuid IS NULL
+                OR (n.id <> $2 AND n.erstellt_am >= (SELECT erstellt_am FROM nachricht WHERE id = $2))
+              )
+            ORDER BY n.erstellt_am ASC
+            "#,
+        )
+        .bind(chat_id)
+        .bind(nach_id)
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| ServerFnError::new(format!("DB-Fehler (nachricht): {e}")))?;
+
+        return Ok(rows
+            .into_iter()
+            .map(|r| {
+                let ts: DateTime<Utc> = r.get("erstellt_am");
+                let local_ts: DateTime<Local> = DateTime::from(ts);
+                ChatNachricht {
+                    id: r.get("id"),
+                    chat_id: r.get("chat_id"),
+                    benutzer_id: r.get("benutzer_id"),
+                    benutzername: r.get("benutzername"),
+                    inhalt: r.get("inhalt"),
+                    anhang_name: r.get("anhang_name"),
+                    anhang_typ: r.get("anhang_typ"),
+                    anhang_daten: r.get("anhang_daten"),
+                    zeitpunkt: local_ts.format("%d.%m.%Y %H:%M").to_string(),
+                }
+            })
+            .collect());
+    }
+
+    // In-Memory-Fallback
+    let guard = store::NACHRICHTEN_MEMORY
+        .lock()
+        .map_err(|_| ServerFnError::new("Speicher-Lock fehlgeschlagen"))?;
+    let im_chat = guard.iter().filter(|m| m.chat_id == chat_id);
+    Ok(match nach_id {
+        None => im_chat.cloned().collect(),
+        Some(nid) => im_chat
+            .skip_while(|m| m.id != nid)
+            .skip(1)
+            .cloned()
+            .collect(),
+    })
 }
 
 #[cfg(feature = "ssr")]
@@ -533,82 +711,87 @@ pub async fn get_chat_nachrichten(chat_id: Uuid) -> Result<Vec<ChatNachricht>, S
     #[cfg(feature = "ssr")]
     {
         use crate::backend::auth::require_current_user;
-        use sqlx::{PgPool, Row};
 
         let current_user = require_current_user().await?;
+        if !ist_chat_mitglied(chat_id, current_user.id).await? {
+            return Err(ServerFnError::new("Kein Zugriff auf diesen Chat."));
+        }
+        lade_nachrichten(chat_id, None).await
+    }
+}
 
-        if let Some(pool) = use_context::<PgPool>() {
-            // Prüfen, ob der aktuelle Benutzer Mitglied dieses Chats ist (Rel_Benutzer_Chat)
-            let is_member = sqlx::query(
-                "SELECT 1 FROM rel_benutzer_chat WHERE chat_id = $1 AND benutzer_id = $2",
-            )
-            .bind(chat_id)
-            .bind(current_user.id)
-            .fetch_optional(&pool)
-            .await
-            .map_err(|e| ServerFnError::new(format!("DB-Fehler: {e}")))?
-            .is_some();
+/// Long-Polling-Endpunkt für Echtzeit-Updates eines Chats.
+///
+/// Antwortet sofort, wenn sich der Zustand gegenüber dem Client-Stand (`nachrichten_version`,
+/// `tipp_signatur`) unterscheidet, und wartet sonst bis zu ~20 s auf eine Änderung.
+#[server(
+    ChatLiveAbfrage,
+    "/api",
+    input = leptos::server_fn::codec::Json,
+    endpoint = "chat_live_abfrage"
+)]
+pub async fn chat_live_abfrage(
+    chat_id: Uuid,
+    letzte_nachricht_id: Option<Uuid>,
+    nachrichten_version: Option<u64>,
+    tipp_signatur: String,
+) -> Result<ChatLiveStatus, ServerFnError> {
+    #[cfg(feature = "ssr")]
+    {
+        use crate::backend::auth::require_current_user;
+        use std::time::Duration;
 
-            if !is_member {
-                return Err(ServerFnError::new(
-                    "Kein Zugriff auf diesen Chat.",
-                ));
-            }
-
-            let rows = sqlx::query(
-                r#"
-                SELECT
-                    n.id,
-                    n.chat_id,
-                    n.benutzer_id,
-                    u.benutzername,
-                    n.inhalt,
-                    n.anhang_name,
-                    n.anhang_typ,
-                    n.anhang_daten,
-                    n.erstellt_am
-                FROM nachricht n
-                INNER JOIN benutzer u ON n.benutzer_id = u.id
-                WHERE n.chat_id = $1
-                ORDER BY n.erstellt_am ASC
-                "#,
-            )
-            .bind(chat_id)
-            .fetch_all(&pool)
-            .await
-            .map_err(|e| ServerFnError::new(format!("DB-Fehler (nachricht): {e}")))?;
-
-            let list = rows
-                .into_iter()
-                .map(|r| {
-                    let ts: DateTime<Utc> = r.get("erstellt_am");
-                    let local_ts: DateTime<Local> = DateTime::from(ts);
-                    ChatNachricht {
-                        id: r.get("id"),
-                        chat_id: r.get("chat_id"),
-                        benutzer_id: r.get("benutzer_id"),
-                        benutzername: r.get("benutzername"),
-                        inhalt: r.get("inhalt"),
-                        anhang_name: r.get("anhang_name"),
-                        anhang_typ: r.get("anhang_typ"),
-                        anhang_daten: r.get("anhang_daten"),
-                        zeitpunkt: local_ts.format("%d.%m.%Y %H:%M").to_string(),
-                    }
-                })
-                .collect();
-
-            return Ok(list);
+        let current_user = require_current_user().await?;
+        if !ist_chat_mitglied(chat_id, current_user.id).await? {
+            return Err(ServerFnError::new("Kein Zugriff auf diesen Chat."));
         }
 
-        // In-Memory-Fallback
-        let guard = store::NACHRICHTEN_MEMORY
-            .lock()
-            .map_err(|_| ServerFnError::new("Speicher-Lock fehlgeschlagen"))?;
-        Ok(guard
-            .iter()
-            .filter(|m| m.chat_id == chat_id)
-            .cloned()
-            .collect())
+        let mut rx = live::SIGNAL.subscribe();
+        rx.borrow_and_update();
+
+        let mut version = live::version(chat_id);
+        let mut tippende = live::tippende(chat_id, current_user.id);
+
+        // Max. 20 Runden à 1 s – kurze Runden, damit abgelaufene Tipp-Signale auch ohne Weckruf verschwinden
+        for _ in 0..20 {
+            if nachrichten_version != Some(version) || tippende.join("|") != tipp_signatur {
+                break;
+            }
+            let _ = tokio::time::timeout(Duration::from_secs(1), rx.changed()).await;
+            version = live::version(chat_id);
+            tippende = live::tippende(chat_id, current_user.id);
+        }
+
+        let neue_nachrichten = if nachrichten_version != Some(version) {
+            lade_nachrichten(chat_id, letzte_nachricht_id).await?
+        } else {
+            Vec::new()
+        };
+
+        Ok(ChatLiveStatus {
+            nachrichten_version: version,
+            neue_nachrichten,
+            tippende,
+        })
+    }
+
+    #[cfg(not(feature = "ssr"))]
+    unreachable!()
+}
+
+/// Meldet, ob der aktuelle Benutzer im Chat gerade eine Nachricht schreibt.
+#[server(SetChatTippstatus, "/api", endpoint = "set_chat_tippstatus")]
+pub async fn set_chat_tippstatus(chat_id: Uuid, tippt: bool) -> Result<(), ServerFnError> {
+    #[cfg(feature = "ssr")]
+    {
+        use crate::backend::auth::require_current_user;
+
+        let current_user = require_current_user().await?;
+        if !ist_chat_mitglied(chat_id, current_user.id).await? {
+            return Err(ServerFnError::new("Kein Zugriff auf diesen Chat."));
+        }
+        live::setze_tippen(chat_id, current_user.id, current_user.benutzername, tippt);
+        Ok(())
     }
 }
 
@@ -686,6 +869,8 @@ pub async fn send_chat_nachricht(
             .await
             .map_err(|e| ServerFnError::new(format!("DB-Insert (nachricht) fehlgeschlagen: {e}")))?;
 
+            live::nachricht_gesendet(chat_id, current_user.id);
+
             return Ok(ChatNachricht {
                 id: nachricht_id,
                 chat_id,
@@ -716,6 +901,8 @@ pub async fn send_chat_nachricht(
             .lock()
             .map_err(|_| ServerFnError::new("Speicher-Lock fehlgeschlagen"))?;
         guard.push(msg.clone());
+        drop(guard);
+        live::nachricht_gesendet(chat_id, msg.benutzer_id);
         return Ok(msg);
     }
 
