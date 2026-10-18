@@ -537,8 +537,8 @@ pub fn ChatSection() -> impl IntoView {
 
     view! {
         <section class="w-full max-w-none flex-1 flex flex-col gap-3 sm:gap-4">
-            // Kopfbereich – auf Smartphones in der Chatansicht ausgeblendet (mehr Platz für Nachrichten)
-            <div class=move || if mobile_show_list.get() { "block" } else { "hidden md:block" }>
+            // Kopfbereich – auf Smartphones komplett ausgeblendet (mehr Platz für Liste & Nachrichten)
+            <div class="hidden md:block">
                 <h1 class="text-2xl lg:text-3xl font-bold tracking-tight">"Chat"</h1>
                 <p class="hidden sm:block text-sm text-base-content/70">
                     "Direkt- und Gruppenchats mit Datei- & Bildupload per Drag & Drop oder Copy & Paste"
@@ -560,13 +560,7 @@ pub fn ChatSection() -> impl IntoView {
             })}
 
             // Haupt-Container: Smartphone = Liste ODER Chat, ab md = beide Spalten nebeneinander
-            <div class=move || {
-                if mobile_show_list.get() {
-                    "w-full grid grid-cols-1 md:grid-cols-12 gap-3 sm:gap-4 h-[calc(100dvh-8.5rem)] sm:h-[calc(100dvh-10rem)] md:h-[calc(100dvh-10rem)] lg:h-[calc(100dvh-11rem)] min-h-[360px] md:min-h-[520px]"
-                } else {
-                    "w-full grid grid-cols-1 md:grid-cols-12 gap-3 sm:gap-4 h-[calc(100dvh-4.5rem)] sm:h-[calc(100dvh-6rem)] md:h-[calc(100dvh-10rem)] lg:h-[calc(100dvh-11rem)] min-h-[360px] md:min-h-[520px]"
-                }
-            }>
+            <div class="w-full grid grid-cols-1 md:grid-cols-12 gap-3 sm:gap-4 h-[calc(100dvh-4.5rem)] sm:h-[calc(100dvh-6rem)] md:h-[calc(100dvh-10rem)] lg:h-[calc(100dvh-11rem)] min-h-[360px] md:min-h-[520px]">
                 // LINKE SPALTE: Gruppenchats & Chatteilnehmer
                 <div class=move || {
                     if mobile_show_list.get() {
