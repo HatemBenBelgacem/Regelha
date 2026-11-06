@@ -631,7 +631,7 @@ pub fn ChatSection() -> impl IntoView {
                     <span>{msg}</span>
                     <button
                         type="button"
-                        class="btn btn-ghost btn-sm btn-square min-h-11 min-w-11 md:min-h-0 md:min-w-0"
+                        class="btn btn-ghost btn-square min-h-11 min-w-11 md:min-h-0 md:min-w-0"
                         aria-label="Hinweis schließen"
                         on:click=move |_| set_error_msg.set(None)
                     >
@@ -657,7 +657,7 @@ pub fn ChatSection() -> impl IntoView {
                                 <span class="text-xs font-semibold uppercase tracking-wide opacity-60">"Gruppenchats"</span>
                                 <button
                                     type="button"
-                                    class="btn btn-md md:btn-sm min-h-11 md:min-h-0 rounded-full bg-[#66023C] hover:bg-[#7A2048] text-white border-none px-4"
+                                    class="btn btn-md min-h-11 md:min-h-0 rounded-full bg-[#66023C] hover:bg-[#7A2048] text-white border-none px-4"
                                     on:click=move |_| set_show_group_form.set(true)
                                 >
                                     "+ Gruppe"
@@ -1025,7 +1025,7 @@ pub fn ChatSection() -> impl IntoView {
                                             </span>
                                             <button
                                                 type="button"
-                                                class="btn btn-ghost btn-sm btn-square min-h-10 min-w-10 md:min-h-0 md:min-w-0 text-error"
+                                                class="btn btn-ghost btn-square min-h-10 min-w-10 md:min-h-0 md:min-w-0 text-error"
                                                 aria-label="Anhang entfernen"
                                                 on:click=move |_| {
                                                     set_pending_anhaenge.update(|v| {
@@ -1048,7 +1048,7 @@ pub fn ChatSection() -> impl IntoView {
                     <form on:submit=on_send_submit class="px-2 sm:px-4 py-2 sm:py-3 border-t border-slate-200 bg-base-100 shrink-0">
                         <div class="flex items-center gap-2">
                             <label
-                                class="btn btn-ghost btn-circle btn-md md:btn-sm min-h-11 min-w-11 md:min-h-0 md:min-w-0 text-slate-500 hover:bg-[#66023C]/10 hover:text-[#66023C] cursor-pointer shrink-0"
+                                class="btn btn-ghost btn-circle btn-md min-h-11 min-w-11 md:min-h-0 md:min-w-0 text-slate-500 hover:bg-[#66023C]/10 hover:text-[#66023C] cursor-pointer shrink-0"
                                 title="Bilder oder Dokumente anhängen"
                                 aria-label="Bilder oder Dokumente anhängen"
                             >
@@ -1075,7 +1075,7 @@ pub fn ChatSection() -> impl IntoView {
 
                             <button
                                 type="submit"
-                                class="btn btn-primary btn-circle sm:btn-wide sm:w-auto sm:rounded-full btn-md md:btn-sm min-h-11 min-w-11 md:min-h-0 md:min-w-0 sm:px-4 shrink-0"
+                                class="btn btn-primary btn-circle sm:btn-wide sm:w-auto sm:rounded-full btn-md min-h-11 min-w-11 md:min-h-0 md:min-w-0 sm:px-4 shrink-0"
                                 aria-label="Nachricht senden"
                                 disabled=move || active_chat.get().is_none() || send_action.pending().get()
                             >
@@ -1236,7 +1236,7 @@ fn NachrichtBubble(m: ChatNachricht, my_id: Memo<Option<Uuid>>) -> impl IntoView
                                 <a
                                     href=daten
                                     download=dateiname
-                                    class="btn btn-sm min-h-10 md:min-h-0 bg-white text-[#66023C] hover:bg-slate-100 border-none shrink-0"
+                                    class="btn min-h-10 md:min-h-0 bg-white text-[#66023C] hover:bg-slate-100 border-none shrink-0"
                                 >
                                     "Herunterladen"
                                 </a>

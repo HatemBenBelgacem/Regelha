@@ -150,7 +150,7 @@ pub fn LoginMaske(on_authenticated: Callback<AuthUser>) -> impl IntoView {
                         </div>
                         <button
                             type="button"
-                            class="btn btn-ghost btn-xs text-primary"
+                            class="btn btn-ghost text-primary"
                             on:click=move |_| {
                                 set_is_register_mode.set(false);
                                 set_benutzername.set("admin".to_string());

@@ -10,7 +10,7 @@ pub fn Header(user: AuthUser, on_logout: Callback<()>) -> impl IntoView {
             <div class="flex-1 flex items-center gap-2 sm:gap-3">
                 <label
                     for="app-sideboard-drawer"
-                    class="btn btn-square btn-ghost btn-sm text-white hover:bg-[#7A2048] lg:hidden"
+                    class="btn btn-square btn-ghost text-white hover:bg-[#7A2048] lg:hidden"
                     title="Navigation öffnen"
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block w-5 h-5 stroke-current">
@@ -31,7 +31,7 @@ pub fn Header(user: AuthUser, on_logout: Callback<()>) -> impl IntoView {
                 </div>
                 <button
                     type="button"
-                    class="btn btn-xs sm:btn-sm bg-white/10 hover:bg-white/20 text-white border-white/25"
+                    class="btn bg-white/10 hover:bg-white/20 text-white border-white/25"
                     on:click=move |_| on_logout.run(())
                 >
                     "Abmelden"

@@ -118,7 +118,7 @@ pub fn AufgabenSection() -> impl IntoView {
                     </div>
                     <button
                         type="button"
-                        class="btn btn-primary btn-sm self-start sm:self-auto"
+                        class="btn btn-primary self-start sm:self-auto"
                         on:click=move |_| {
                             set_bearbeiten_id.set(None);
                             set_error_msg.set(None);
@@ -261,7 +261,7 @@ pub fn AufgabenSection() -> impl IntoView {
                                                                 <td class="text-right whitespace-nowrap">
                                                                     <button
                                                                         type="button"
-                                                                        class="btn btn-ghost btn-xs"
+                                                                        class="btn btn-ghost"
                                                                         title="Aufgabe bearbeiten"
                                                                         aria-label="Aufgabe bearbeiten"
                                                                         on:click=move |_| {
@@ -276,7 +276,7 @@ pub fn AufgabenSection() -> impl IntoView {
                                                                     </button>
                                                                     <button
                                                                         type="button"
-                                                                        class="btn btn-ghost btn-xs text-error"
+                                                                        class="btn btn-ghost text-error"
                                                                         title="Aufgabe löschen"
                                                                         on:click=move |_| { delete_action.dispatch(id); }
                                                                     >

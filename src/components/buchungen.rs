@@ -132,7 +132,7 @@ pub fn BuchungenSection() -> impl IntoView {
                     <div class="flex flex-wrap items-center gap-2">
                     <button
                         type="button"
-                        class="btn btn-primary btn-sm"
+                        class="btn btn-primary"
                         on:click=move |_| {
                             set_bearbeiten_id.set(None);
                             set_error_msg.set(None);
@@ -150,21 +150,21 @@ pub fn BuchungenSection() -> impl IntoView {
                     <div class="join flex flex-wrap">
                         <button
                             type="button"
-                            class=move || format!("btn btn-xs sm:btn-sm join-item {}", if filter_art.get().is_none() { "btn-primary" } else { "btn-ghost" })
+                            class=move || format!("btn join-item {}", if filter_art.get().is_none() { "btn-primary" } else { "btn-ghost" })
                             on:click=move |_| set_filter_art.set(None)
                         >
                             "Alle"
                         </button>
                         <button
                             type="button"
-                            class=move || format!("btn btn-xs sm:btn-sm join-item {}", if filter_art.get() == Some(BuchungsArt::Eingang) { "btn-success text-success-content" } else { "btn-ghost" })
+                            class=move || format!("btn join-item {}", if filter_art.get() == Some(BuchungsArt::Eingang) { "btn-success text-success-content" } else { "btn-ghost" })
                             on:click=move |_| set_filter_art.set(Some(BuchungsArt::Eingang))
                         >
                             "Eingänge"
                         </button>
                         <button
                             type="button"
-                            class=move || format!("btn btn-xs sm:btn-sm join-item {}", if filter_art.get() == Some(BuchungsArt::Ausgang) { "btn-error text-error-content" } else { "btn-ghost" })
+                            class=move || format!("btn join-item {}", if filter_art.get() == Some(BuchungsArt::Ausgang) { "btn-error text-error-content" } else { "btn-ghost" })
                             on:click=move |_| set_filter_art.set(Some(BuchungsArt::Ausgang))
                         >
                             "Ausgänge"
@@ -364,7 +364,7 @@ pub fn BuchungenSection() -> impl IntoView {
                                                                 <td class="text-right whitespace-nowrap">
                                                                     <button
                                                                         type="button"
-                                                                        class="btn btn-ghost btn-xs"
+                                                                        class="btn btn-ghost"
                                                                         title="Buchung bearbeiten"
                                                                         aria-label="Buchung bearbeiten"
                                                                         on:click=move |_| {
@@ -381,7 +381,7 @@ pub fn BuchungenSection() -> impl IntoView {
                                                                     </button>
                                                                     <button
                                                                         type="button"
-                                                                        class="btn btn-ghost btn-xs text-error"
+                                                                        class="btn btn-ghost text-error"
                                                                         title="Eintrag löschen"
                                                                         on:click=move |_| { delete_action.dispatch(id); }
                                                                     >

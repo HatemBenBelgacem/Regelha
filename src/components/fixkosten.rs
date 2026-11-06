@@ -191,7 +191,7 @@ pub fn FixkostenSection() -> impl IntoView {
                     </div>
                     <button
                         type="button"
-                        class="btn btn-secondary btn-sm self-start sm:self-auto"
+                        class="btn btn-secondary self-start sm:self-auto"
                         on:click=move |_| {
                             set_bearbeiten_id.set(None);
                             set_error_msg.set(None);
@@ -416,7 +416,7 @@ pub fn FixkostenSection() -> impl IntoView {
                                                                 <td class="text-right whitespace-nowrap">
                                                                     <button
                                                                         type="button"
-                                                                        class="btn btn-ghost btn-xs"
+                                                                        class="btn btn-ghost"
                                                                         title="Fixkosten bearbeiten"
                                                                         aria-label="Fixkosten bearbeiten"
                                                                         on:click=move |_| {
@@ -435,7 +435,7 @@ pub fn FixkostenSection() -> impl IntoView {
                                                                     </button>
                                                                     <button
                                                                         type="button"
-                                                                        class="btn btn-ghost btn-xs text-error"
+                                                                        class="btn btn-ghost text-error"
                                                                         title="Fixkosten löschen"
                                                                         on:click=move |_| { delete_action.dispatch(id); }
                                                                     >
