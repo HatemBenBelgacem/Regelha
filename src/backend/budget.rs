@@ -778,6 +778,16 @@ pub async fn delete_fixkosten(id: Uuid) -> Result<(), ServerFnError> {
     Ok(())
 }
 
+/// Ein Fixkosten-Vertrag mit seinem Betrag in einem bestimmten Monat.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct FixkostenPosten {
+    pub id: Uuid,
+    pub buchungstext: String,
+    pub zahlungsperiode: Zahlungsperiode,
+    /// Auf einen Monat umgerechneter Betrag in CHF
+    pub monatsbetrag: f64,
+}
+
 /// Eine Zeile der Monatsübersicht (Kosten pro Monat).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MonatsKosten {
@@ -787,6 +797,8 @@ pub struct MonatsKosten {
     pub einnahmen: f64,
     pub ausgaben: f64,
     pub fixkosten: f64,
+    /// Einzelne Fixkosten-Verträge, die in diesem Monat Kosten verursachen
+    pub fixkosten_posten: Vec<FixkostenPosten>,
     pub total_kosten: f64,
     pub saldo: f64,
     pub anzahl_buchungen: usize,
@@ -829,11 +841,17 @@ pub fn berechne_monatskosten(
                     BuchungsArt::Ausgang => ausgaben += b.betrag,
                 }
             }
-            let summe_fixkosten: f64 = fixkosten
+            let fixkosten_posten: Vec<FixkostenPosten> = fixkosten
                 .iter()
                 .filter(|f| f.zaehlt_im_monat(jahr, monat))
-                .map(FixkostenEintrag::monatsbetrag)
-                .sum();
+                .map(|f| FixkostenPosten {
+                    id: f.id,
+                    buchungstext: f.buchungstext.clone(),
+                    zahlungsperiode: f.zahlungsperiode,
+                    monatsbetrag: f.monatsbetrag(),
+                })
+                .collect();
+            let summe_fixkosten: f64 = fixkosten_posten.iter().map(|p| p.monatsbetrag).sum();
             let total_kosten = ausgaben + summe_fixkosten;
 
             MonatsKosten {
@@ -843,6 +861,7 @@ pub fn berechne_monatskosten(
                 einnahmen,
                 ausgaben,
                 fixkosten: summe_fixkosten,
+                fixkosten_posten,
                 total_kosten,
                 saldo: einnahmen - total_kosten,
                 anzahl_buchungen,
@@ -916,6 +935,8 @@ mod tests {
 
         // Januar 2026: 1000 + 1200/12, beendeter Vertrag zählt nicht
         assert_eq!(zeilen[0].fixkosten, 1100.0);
+        // Zwei Verträge zählen im Januar 2026: der monatliche und der jährliche (anteilig)
+        assert_eq!(zeilen[0].fixkosten_posten.len(), 2);
         // November 2025: jährlicher Vertrag hat noch nicht begonnen
         let nov = zeilen.iter().find(|z| (z.jahr, z.monat) == (2025, 11));
         assert!(nov.is_none(), "ohne Buchungen beginnt die Liste beim aktuellen Monat");
@@ -944,6 +965,8 @@ mod tests {
 
         assert_eq!(zeilen[2].ausgaben, 150.0);
         assert_eq!(zeilen[2].total_kosten, 1150.0);
+        assert_eq!(zeilen[2].fixkosten_posten.len(), 1);
+        assert_eq!(zeilen[2].fixkosten_posten[0].monatsbetrag, 1000.0);
         assert_eq!(zeilen[2].anzahl_buchungen, 2);
         assert_eq!(zeilen[1].total_kosten, 1000.0);
         assert_eq!(zeilen[0].saldo, 2000.0);
