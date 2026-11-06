@@ -38,13 +38,141 @@ pub struct Buchung {
     pub benutzer: String,
 }
 
+/// Wie oft eine Fixkosten-Position bezahlt wird. Der erfasste Betrag gilt pro Periode.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Zahlungsperiode {
+    Monatlich,
+    Vierteljaehrlich,
+    Halbjaehrlich,
+    Jaehrlich,
+}
+
+impl Zahlungsperiode {
+    pub const ALLE: [Self; 4] = [
+        Self::Monatlich,
+        Self::Vierteljaehrlich,
+        Self::Halbjaehrlich,
+        Self::Jaehrlich,
+    ];
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Monatlich => "Monatlich",
+            Self::Vierteljaehrlich => "Vierteljaehrlich",
+            Self::Halbjaehrlich => "Halbjaehrlich",
+            Self::Jaehrlich => "Jaehrlich",
+        }
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Monatlich => "Monatlich",
+            Self::Vierteljaehrlich => "Vierteljährlich",
+            Self::Halbjaehrlich => "Halbjährlich",
+            Self::Jaehrlich => "Jährlich",
+        }
+    }
+
+    pub fn from_db_str(s: &str) -> Self {
+        match s {
+            "Vierteljaehrlich" => Self::Vierteljaehrlich,
+            "Halbjaehrlich" => Self::Halbjaehrlich,
+            "Jaehrlich" => Self::Jaehrlich,
+            _ => Self::Monatlich,
+        }
+    }
+
+    /// Anzahl Monate, die eine Zahlung abdeckt.
+    pub fn monate(&self) -> u32 {
+        match self {
+            Self::Monatlich => 1,
+            Self::Vierteljaehrlich => 3,
+            Self::Halbjaehrlich => 6,
+            Self::Jaehrlich => 12,
+        }
+    }
+}
+
+/// Status eines Fixkosten-Vertrags.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FixkostenStatus {
+    /// Vertrag läuft.
+    Aktiv,
+    /// Vertrag ist gekündigt, läuft aber bis zum Ablauf der Kündigungsfrist weiter.
+    Gekuendigt,
+    /// Vertrag ist beendet, es fallen keine Kosten mehr an.
+    Beendet,
+}
+
+impl FixkostenStatus {
+    pub const ALLE: [Self; 3] = [Self::Aktiv, Self::Gekuendigt, Self::Beendet];
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Aktiv => "Aktiv",
+            Self::Gekuendigt => "Gekuendigt",
+            Self::Beendet => "Beendet",
+        }
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Aktiv => "Aktiv",
+            Self::Gekuendigt => "Gekündigt",
+            Self::Beendet => "Beendet",
+        }
+    }
+
+    pub fn from_db_str(s: &str) -> Self {
+        match s {
+            "Gekuendigt" => Self::Gekuendigt,
+            "Beendet" => Self::Beendet,
+            _ => Self::Aktiv,
+        }
+    }
+
+    /// Verursacht ein Vertrag mit diesem Status (noch) Kosten?
+    pub fn verursacht_kosten(&self) -> bool {
+        !matches!(self, Self::Beendet)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct FixkostenEintrag {
     pub id: Uuid,
     pub buchungstext: String,
+    /// Betrag pro Zahlungsperiode in CHF
     pub betrag: f64,
+    pub beginndatum: NaiveDate,
+    /// Kündigungsfrist in Monaten (0 = jederzeit kündbar)
+    pub kuendigungsfrist_monate: i32,
+    pub zahlungsperiode: Zahlungsperiode,
+    pub status: FixkostenStatus,
     pub benutzer_id: Uuid,
     pub benutzer: String,
+}
+
+impl FixkostenEintrag {
+    /// Auf einen Monat umgerechneter Betrag (z.B. Jahresbetrag / 12).
+    pub fn monatsbetrag(&self) -> f64 {
+        self.betrag / self.zahlungsperiode.monate() as f64
+    }
+
+    /// Fallen für diesen Eintrag im angegebenen Monat Kosten an?
+    /// (Vertrag hat bis Ende des Monats begonnen und ist nicht beendet.)
+    pub fn zaehlt_im_monat(&self, jahr: i32, monat: u32) -> bool {
+        let beginn = (self.beginndatum.year(), self.beginndatum.month());
+        self.status.verursacht_kosten() && beginn <= (jahr, monat)
+    }
+}
+
+/// Text für eine Kündigungsfrist in Monaten.
+pub fn kuendigungsfrist_text(monate: i32) -> String {
+    match monate {
+        m if m <= 0 => "Keine".to_string(),
+        1 => "1 Monat".to_string(),
+        m => format!("{m} Monate"),
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -141,6 +269,10 @@ mod store {
                 id: Uuid::new_v4(),
                 buchungstext: "Warmmiete".to_string(),
                 betrag: 980.00,
+                beginndatum: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+                kuendigungsfrist_monate: 3,
+                zahlungsperiode: Zahlungsperiode::Monatlich,
+                status: FixkostenStatus::Aktiv,
                 benutzer_id: admin_id,
                 benutzer: "admin".to_string(),
             },
@@ -148,6 +280,10 @@ mod store {
                 id: Uuid::new_v4(),
                 buchungstext: "Krankenkasse".to_string(),
                 betrag: 345.00,
+                beginndatum: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+                kuendigungsfrist_monate: 3,
+                zahlungsperiode: Zahlungsperiode::Monatlich,
+                status: FixkostenStatus::Aktiv,
                 benutzer_id: admin_id,
                 benutzer: "admin".to_string(),
             },
@@ -155,6 +291,10 @@ mod store {
                 id: Uuid::new_v4(),
                 buchungstext: "Internet & Mobilfunk".to_string(),
                 betrag: 59.90,
+                beginndatum: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+                kuendigungsfrist_monate: 1,
+                zahlungsperiode: Zahlungsperiode::Monatlich,
+                status: FixkostenStatus::Aktiv,
                 benutzer_id: admin_id,
                 benutzer: "admin".to_string(),
             },
@@ -200,7 +340,11 @@ pub async fn get_dashboard_kennzahlen() -> Result<DashboardKennzahlen, ServerFnE
         .map(|b| b.betrag)
         .fold(0.0, |acc, x| acc + x);
 
-    let summe_fixkosten: f64 = fixkosten.iter().map(|f| f.betrag).fold(0.0, |acc, x| acc + x);
+    let summe_fixkosten: f64 = fixkosten
+        .iter()
+        .filter(|f| f.zaehlt_im_monat(current_year, current_month))
+        .map(FixkostenEintrag::monatsbetrag)
+        .sum();
 
     let durchschnitt_aktueller_monat = ausgaben_aktueller_monat / (tag_im_monat as f64);
 
@@ -402,11 +546,16 @@ pub async fn get_fixkosten() -> Result<Vec<FixkostenEintrag>, ServerFnError> {
                     f.id,
                     f.buchungstext,
                     f.betrag,
+                    f.beginndatum,
+                    f.kuendigungsfrist_monate,
+                    f.zahlungsperiode,
+                    f.status,
                     f.benutzer_id,
                     u.benutzername AS benutzer
                 FROM fixkosten f
                 INNER JOIN benutzer u ON f.benutzer_id = u.id
                 WHERE f.benutzer_id = $1
+                ORDER BY f.beginndatum DESC, f.buchungstext
                 "#,
             )
             .bind(current_user.id)
@@ -420,6 +569,12 @@ pub async fn get_fixkosten() -> Result<Vec<FixkostenEintrag>, ServerFnError> {
                     id: row.get("id"),
                     buchungstext: row.get("buchungstext"),
                     betrag: row.get("betrag"),
+                    beginndatum: row.get("beginndatum"),
+                    kuendigungsfrist_monate: row.get("kuendigungsfrist_monate"),
+                    zahlungsperiode: Zahlungsperiode::from_db_str(
+                        &row.get::<String, _>("zahlungsperiode"),
+                    ),
+                    status: FixkostenStatus::from_db_str(&row.get::<String, _>("status")),
                     benutzer_id: row.get("benutzer_id"),
                     benutzer: row.get("benutzer"),
                 })
@@ -443,6 +598,10 @@ pub async fn get_fixkosten() -> Result<Vec<FixkostenEintrag>, ServerFnError> {
 pub async fn add_fixkosten(
     buchungstext: String,
     betrag: f64,
+    beginndatum: String,
+    kuendigungsfrist_monate: i32,
+    zahlungsperiode: Zahlungsperiode,
+    status: FixkostenStatus,
 ) -> Result<FixkostenEintrag, ServerFnError> {
     let trimmed = buchungstext.trim().to_string();
     if trimmed.is_empty() {
@@ -453,6 +612,14 @@ pub async fn add_fixkosten(
             "Bitte einen gültigen positiven Betrag eingeben.",
         ));
     }
+    if !(0..=36).contains(&kuendigungsfrist_monate) {
+        return Err(ServerFnError::new(
+            "Die Kündigungsfrist muss zwischen 0 und 36 Monaten liegen.",
+        ));
+    }
+    let beginndatum = NaiveDate::parse_from_str(beginndatum.trim(), "%Y-%m-%d")
+        .or_else(|_| NaiveDate::parse_from_str(beginndatum.trim(), "%d.%m.%Y"))
+        .map_err(|_| ServerFnError::new("Bitte ein gültiges Beginndatum auswählen."))?;
 
     #[cfg(feature = "ssr")]
     {
@@ -465,17 +632,29 @@ pub async fn add_fixkosten(
             id: Uuid::new_v4(),
             buchungstext: trimmed,
             betrag: betrag.abs(),
+            beginndatum,
+            kuendigungsfrist_monate,
+            zahlungsperiode,
+            status,
             benutzer_id: current_user.id,
             benutzer: current_user.benutzername,
         };
 
         if let Some(pool) = use_context::<PgPool>() {
             sqlx::query(
-                "INSERT INTO fixkosten (id, buchungstext, betrag, benutzer_id) VALUES ($1, $2, $3, $4)",
+                r#"
+                INSERT INTO fixkosten
+                    (id, buchungstext, betrag, beginndatum, kuendigungsfrist_monate, zahlungsperiode, status, benutzer_id)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                "#,
             )
             .bind(eintrag.id)
             .bind(&eintrag.buchungstext)
             .bind(eintrag.betrag)
+            .bind(eintrag.beginndatum)
+            .bind(eintrag.kuendigungsfrist_monate)
+            .bind(eintrag.zahlungsperiode.as_str())
+            .bind(eintrag.status.as_str())
             .bind(eintrag.benutzer_id)
             .execute(&pool)
             .await
@@ -493,6 +672,42 @@ pub async fn add_fixkosten(
 
     #[cfg(not(feature = "ssr"))]
     unreachable!()
+}
+
+#[server(UpdateFixkostenStatus, "/api", endpoint = "update_fixkosten_status")]
+pub async fn update_fixkosten_status(
+    id: Uuid,
+    status: FixkostenStatus,
+) -> Result<(), ServerFnError> {
+    #[cfg(feature = "ssr")]
+    {
+        use crate::backend::auth::require_current_user;
+        use sqlx::PgPool;
+
+        let current_user = require_current_user().await?;
+
+        if let Some(pool) = use_context::<PgPool>() {
+            sqlx::query("UPDATE fixkosten SET status = $1 WHERE id = $2 AND benutzer_id = $3")
+                .bind(status.as_str())
+                .bind(id)
+                .bind(current_user.id)
+                .execute(&pool)
+                .await
+                .map_err(|e| ServerFnError::new(format!("DB-Update fehlgeschlagen: {e}")))?;
+            return Ok(());
+        }
+
+        let mut guard = store::FIXKOSTEN_MEMORY
+            .lock()
+            .map_err(|_| ServerFnError::new("Speicher-Lock fehlgeschlagen"))?;
+        if let Some(f) = guard.iter_mut().find(|f| {
+            f.id == id && (f.benutzer_id == current_user.id || f.benutzer == current_user.benutzername)
+        }) {
+            f.status = status;
+        }
+    }
+
+    Ok(())
 }
 
 #[server(DeleteFixkosten, "/api", endpoint = "delete_fixkosten")]
@@ -538,10 +753,12 @@ pub struct MonatsKosten {
 }
 
 /// Gruppiert Buchungen nach Monat und rechnet die monatlichen Fixkosten dazu.
+/// Fixkosten zählen ab ihrem Beginnmonat, solange sie nicht beendet sind; nicht monatliche
+/// Zahlungen werden auf den Monat umgerechnet (z.B. Jahresbetrag / 12).
 /// Die Liste reicht vom Monat der ältesten Buchung bis zum `bis`-Monat (neuester Monat zuerst).
 pub fn berechne_monatskosten(
     buchungen: &[Buchung],
-    summe_fixkosten: f64,
+    fixkosten: &[FixkostenEintrag],
     bis: NaiveDate,
 ) -> Vec<MonatsKosten> {
     let monats_index = |jahr: i32, monat: u32| jahr * 12 + (monat as i32 - 1);
@@ -572,6 +789,11 @@ pub fn berechne_monatskosten(
                     BuchungsArt::Ausgang => ausgaben += b.betrag,
                 }
             }
+            let summe_fixkosten: f64 = fixkosten
+                .iter()
+                .filter(|f| f.zaehlt_im_monat(jahr, monat))
+                .map(FixkostenEintrag::monatsbetrag)
+                .sum();
             let total_kosten = ausgaben + summe_fixkosten;
 
             MonatsKosten {
@@ -594,11 +816,10 @@ pub async fn get_monatskosten() -> Result<Vec<MonatsKosten>, ServerFnError> {
     // `get_buchungen` und `get_fixkosten` liefern ausschließlich die Einträge des angemeldeten Benutzers
     let buchungen = get_buchungen().await?;
     let fixkosten = get_fixkosten().await?;
-    let summe_fixkosten: f64 = fixkosten.iter().map(|f| f.betrag).sum();
 
     Ok(berechne_monatskosten(
         &buchungen,
-        summe_fixkosten,
+        &fixkosten,
         Local::now().date_naive(),
     ))
 }
@@ -619,6 +840,47 @@ mod tests {
         }
     }
 
+    fn fixkosten(
+        betrag: f64,
+        beginn: (i32, u32, u32),
+        periode: Zahlungsperiode,
+        status: FixkostenStatus,
+    ) -> FixkostenEintrag {
+        FixkostenEintrag {
+            id: Uuid::new_v4(),
+            buchungstext: "Test".to_string(),
+            betrag,
+            beginndatum: NaiveDate::from_ymd_opt(beginn.0, beginn.1, beginn.2).unwrap(),
+            kuendigungsfrist_monate: 3,
+            zahlungsperiode: periode,
+            status,
+            benutzer_id: Uuid::nil(),
+            benutzer: "test".to_string(),
+        }
+    }
+
+    #[test]
+    fn fixkosten_beginn_periode_und_status() {
+        let liste = vec![
+            fixkosten(1000.0, (2025, 1, 15), Zahlungsperiode::Monatlich, FixkostenStatus::Aktiv),
+            fixkosten(1200.0, (2025, 12, 1), Zahlungsperiode::Jaehrlich, FixkostenStatus::Gekuendigt),
+            fixkosten(500.0, (2020, 1, 1), Zahlungsperiode::Monatlich, FixkostenStatus::Beendet),
+        ];
+        let bis = NaiveDate::from_ymd_opt(2026, 1, 15).unwrap();
+        let zeilen = berechne_monatskosten(&[], &liste, bis);
+
+        // Januar 2026: 1000 + 1200/12, beendeter Vertrag zählt nicht
+        assert_eq!(zeilen[0].fixkosten, 1100.0);
+        // November 2025: jährlicher Vertrag hat noch nicht begonnen
+        let nov = zeilen.iter().find(|z| (z.jahr, z.monat) == (2025, 11));
+        assert!(nov.is_none(), "ohne Buchungen beginnt die Liste beim aktuellen Monat");
+
+        assert_eq!(liste[1].monatsbetrag(), 100.0);
+        assert!(!liste[1].zaehlt_im_monat(2025, 11));
+        assert!(liste[1].zaehlt_im_monat(2025, 12));
+        assert!(!liste[2].zaehlt_im_monat(2026, 1));
+    }
+
     #[test]
     fn monatskosten_ueber_jahreswechsel() {
         let buchungen = vec![
@@ -627,7 +889,8 @@ mod tests {
             buchung((2026, 1, 1), 3000.0, BuchungsArt::Eingang),
         ];
         let bis = NaiveDate::from_ymd_opt(2026, 1, 15).unwrap();
-        let zeilen = berechne_monatskosten(&buchungen, 1000.0, bis);
+        let fix = vec![fixkosten(1000.0, (2024, 1, 1), Zahlungsperiode::Monatlich, FixkostenStatus::Aktiv)];
+        let zeilen = berechne_monatskosten(&buchungen, &fix, bis);
 
         assert_eq!(zeilen.len(), 3);
         assert_eq!((zeilen[0].jahr, zeilen[0].monat), (2026, 1));
@@ -645,7 +908,7 @@ mod tests {
     #[test]
     fn monatskosten_ohne_buchungen() {
         let bis = NaiveDate::from_ymd_opt(2026, 11, 6).unwrap();
-        let zeilen = berechne_monatskosten(&[], 0.0, bis);
+        let zeilen = berechne_monatskosten(&[], &[], bis);
         assert_eq!(zeilen.len(), 1);
         assert_eq!(zeilen[0].monat_name, "November 2026");
     }

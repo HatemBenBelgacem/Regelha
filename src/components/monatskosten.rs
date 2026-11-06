@@ -130,7 +130,7 @@ pub fn MonatskostenSection() -> impl IntoView {
                 </div>
 
                 <p class="text-xs text-base-content/60">
-                    "Total Kosten = Ausgaben + Fixkosten. Die Fixkosten entsprechen der aktuellen Summe aus „Fixkosten“ und werden jedem Monat angerechnet."
+                    "Total Kosten = Ausgaben + Fixkosten. Fixkosten zählen ab ihrem Beginnmonat, solange sie nicht beendet sind. Vierteljährliche, halbjährliche und jährliche Zahlungen werden auf den Monat umgerechnet."
                 </p>
             </div>
         </section>
