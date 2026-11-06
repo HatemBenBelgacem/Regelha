@@ -2,7 +2,10 @@ use leptos::prelude::*;
 use leptos_router::hooks::use_url;
 
 #[component]
-pub fn Sideboard() -> impl IntoView {
+pub fn Sideboard(
+    /// Wird bei jedem Klick auf einen Menüpunkt aufgerufen (schliesst den Drawer auf dem Smartphone)
+    on_navigate: Callback<()>,
+) -> impl IntoView {
     let url = use_url();
     // Nur das Icon und der Text des aktiven Menüpunkts werden lila (#66023C / #7A2048) eingefärbt
     let nav_link_class = move |path: &str| {
@@ -22,7 +25,7 @@ pub fn Sideboard() -> impl IntoView {
     };
 
     view! {
-        <aside class="w-72 sm:w-64 min-h-full bg-white border-r border-slate-200 flex flex-col justify-between p-4">
+        <aside class="w-screen lg:w-64 min-h-full bg-white border-r border-slate-200 flex flex-col justify-between p-4">
             <div class="space-y-4">
                 // Mobile Header im Drawer mit Schließen-Button
                 <div class="flex items-center justify-between px-2 pt-1 lg:hidden border-b border-slate-100 pb-3">
@@ -48,7 +51,7 @@ pub fn Sideboard() -> impl IntoView {
                             </summary>
                             <ul class="mt-1 space-y-1">
                                 <li>
-                                    <a href="/" class=move || nav_link_class("/")>
+                                    <a href="/" on:click=move |_| on_navigate.run(()) class=move || nav_link_class("/")>
                                         <svg xmlns="http://www.w3.org/2000/svg" class=move || nav_icon_class("/") fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
                                         </svg>
@@ -56,7 +59,7 @@ pub fn Sideboard() -> impl IntoView {
                                     </a>
                                 </li>
                                 <li>
-                                    <a href="/buchungen" class=move || nav_link_class("/buchungen")>
+                                    <a href="/buchungen" on:click=move |_| on_navigate.run(()) class=move || nav_link_class("/buchungen")>
                                         <svg xmlns="http://www.w3.org/2000/svg" class=move || nav_icon_class("/buchungen") fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
                                         </svg>
@@ -64,7 +67,7 @@ pub fn Sideboard() -> impl IntoView {
                                     </a>
                                 </li>
                                 <li>
-                                    <a href="/fixkosten" class=move || nav_link_class("/fixkosten")>
+                                    <a href="/fixkosten" on:click=move |_| on_navigate.run(()) class=move || nav_link_class("/fixkosten")>
                                         <svg xmlns="http://www.w3.org/2000/svg" class=move || nav_icon_class("/fixkosten") fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                                         </svg>
@@ -77,7 +80,7 @@ pub fn Sideboard() -> impl IntoView {
 
                     // Aufgaben
                     <li class="mt-2">
-                        <a href="/aufgaben" class=move || nav_link_class("/aufgaben")>
+                        <a href="/aufgaben" on:click=move |_| on_navigate.run(()) class=move || nav_link_class("/aufgaben")>
                             <svg xmlns="http://www.w3.org/2000/svg" class=move || nav_icon_class("/aufgaben") fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
                             </svg>
@@ -87,7 +90,7 @@ pub fn Sideboard() -> impl IntoView {
 
                     // Chat
                     <li class="mt-1">
-                        <a href="/chat" class=move || nav_link_class("/chat")>
+                        <a href="/chat" on:click=move |_| on_navigate.run(()) class=move || nav_link_class("/chat")>
                             <svg xmlns="http://www.w3.org/2000/svg" class=move || nav_icon_class("/chat") fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                             </svg>
