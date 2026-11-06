@@ -522,3 +522,131 @@ pub async fn delete_fixkosten(id: Uuid) -> Result<(), ServerFnError> {
 
     Ok(())
 }
+
+/// Eine Zeile der Monatsübersicht (Kosten pro Monat).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct MonatsKosten {
+    pub jahr: i32,
+    pub monat: u32,
+    pub monat_name: String,
+    pub einnahmen: f64,
+    pub ausgaben: f64,
+    pub fixkosten: f64,
+    pub total_kosten: f64,
+    pub saldo: f64,
+    pub anzahl_buchungen: usize,
+}
+
+/// Gruppiert Buchungen nach Monat und rechnet die monatlichen Fixkosten dazu.
+/// Die Liste reicht vom Monat der ältesten Buchung bis zum `bis`-Monat (neuester Monat zuerst).
+pub fn berechne_monatskosten(
+    buchungen: &[Buchung],
+    summe_fixkosten: f64,
+    bis: NaiveDate,
+) -> Vec<MonatsKosten> {
+    let monats_index = |jahr: i32, monat: u32| jahr * 12 + (monat as i32 - 1);
+    let ende = monats_index(bis.year(), bis.month());
+    let start = buchungen
+        .iter()
+        .map(|b| monats_index(b.erstellt_am.year(), b.erstellt_am.month()))
+        .min()
+        .unwrap_or(ende)
+        .min(ende);
+
+    (start..=ende)
+        .rev()
+        .map(|idx| {
+            let jahr = idx.div_euclid(12);
+            let monat = idx.rem_euclid(12) as u32 + 1;
+            let im_monat = buchungen
+                .iter()
+                .filter(|b| b.erstellt_am.year() == jahr && b.erstellt_am.month() == monat);
+
+            let mut einnahmen = 0.0;
+            let mut ausgaben = 0.0;
+            let mut anzahl_buchungen = 0;
+            for b in im_monat {
+                anzahl_buchungen += 1;
+                match b.art {
+                    BuchungsArt::Eingang => einnahmen += b.betrag,
+                    BuchungsArt::Ausgang => ausgaben += b.betrag,
+                }
+            }
+            let total_kosten = ausgaben + summe_fixkosten;
+
+            MonatsKosten {
+                jahr,
+                monat,
+                monat_name: format!("{} {}", german_month_name(monat), jahr),
+                einnahmen,
+                ausgaben,
+                fixkosten: summe_fixkosten,
+                total_kosten,
+                saldo: einnahmen - total_kosten,
+                anzahl_buchungen,
+            }
+        })
+        .collect()
+}
+
+#[server(GetMonatskosten, "/api", endpoint = "get_monatskosten")]
+pub async fn get_monatskosten() -> Result<Vec<MonatsKosten>, ServerFnError> {
+    // `get_buchungen` und `get_fixkosten` liefern ausschließlich die Einträge des angemeldeten Benutzers
+    let buchungen = get_buchungen().await?;
+    let fixkosten = get_fixkosten().await?;
+    let summe_fixkosten: f64 = fixkosten.iter().map(|f| f.betrag).sum();
+
+    Ok(berechne_monatskosten(
+        &buchungen,
+        summe_fixkosten,
+        Local::now().date_naive(),
+    ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn buchung(datum: (i32, u32, u32), betrag: f64, art: BuchungsArt) -> Buchung {
+        Buchung {
+            id: Uuid::new_v4(),
+            buchungstext: "Test".to_string(),
+            betrag,
+            art,
+            erstellt_am: NaiveDate::from_ymd_opt(datum.0, datum.1, datum.2).unwrap(),
+            benutzer_id: Uuid::nil(),
+            benutzer: "test".to_string(),
+        }
+    }
+
+    #[test]
+    fn monatskosten_ueber_jahreswechsel() {
+        let buchungen = vec![
+            buchung((2025, 11, 3), 100.0, BuchungsArt::Ausgang),
+            buchung((2025, 11, 20), 50.0, BuchungsArt::Ausgang),
+            buchung((2026, 1, 1), 3000.0, BuchungsArt::Eingang),
+        ];
+        let bis = NaiveDate::from_ymd_opt(2026, 1, 15).unwrap();
+        let zeilen = berechne_monatskosten(&buchungen, 1000.0, bis);
+
+        assert_eq!(zeilen.len(), 3);
+        assert_eq!((zeilen[0].jahr, zeilen[0].monat), (2026, 1));
+        assert_eq!((zeilen[1].jahr, zeilen[1].monat), (2025, 12));
+        assert_eq!((zeilen[2].jahr, zeilen[2].monat), (2025, 11));
+
+        assert_eq!(zeilen[2].ausgaben, 150.0);
+        assert_eq!(zeilen[2].total_kosten, 1150.0);
+        assert_eq!(zeilen[2].anzahl_buchungen, 2);
+        assert_eq!(zeilen[1].total_kosten, 1000.0);
+        assert_eq!(zeilen[0].saldo, 2000.0);
+        assert_eq!(zeilen[0].monat_name, "Januar 2026");
+    }
+
+    #[test]
+    fn monatskosten_ohne_buchungen() {
+        let bis = NaiveDate::from_ymd_opt(2026, 11, 6).unwrap();
+        let zeilen = berechne_monatskosten(&[], 0.0, bis);
+        assert_eq!(zeilen.len(), 1);
+        assert_eq!(zeilen[0].monat_name, "November 2026");
+    }
+}
