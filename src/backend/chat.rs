@@ -46,6 +46,13 @@ pub struct ChatUebersicht {
     pub chats: Vec<ChatRaum>,
 }
 
+/// Anzahl ungelesener Nachrichten in einem Chat (für den angemeldeten Benutzer).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UngeleseneChat {
+    pub chat_id: Uuid,
+    pub anzahl: u32,
+}
+
 #[cfg(feature = "ssr")]
 mod store {
     use super::*;
@@ -69,6 +76,17 @@ mod store {
     pub static REL_BENUTZER_CHAT_MEMORY: LazyLock<Mutex<Vec<StoredRelBenutzerChat>>> =
         LazyLock::new(|| Mutex::new(Vec::new()));
     pub static NACHRICHTEN_MEMORY: LazyLock<Mutex<Vec<ChatNachricht>>> =
+        LazyLock::new(|| Mutex::new(Vec::new()));
+
+    /// Zuletzt gelesene Nachricht eines Benutzers in einem Chat.
+    #[derive(Clone, Debug)]
+    pub struct StoredLesestand {
+        pub benutzer_id: Uuid,
+        pub chat_id: Uuid,
+        pub letzte_nachricht_id: Uuid,
+    }
+
+    pub static LESESTAND_MEMORY: LazyLock<Mutex<Vec<StoredLesestand>>> =
         LazyLock::new(|| Mutex::new(Vec::new()));
 }
 
@@ -813,6 +831,183 @@ pub async fn set_chat_tippstatus(chat_id: Uuid, tippt: bool) -> Result<(), Serve
         live::setze_tippen(chat_id, current_user.id, current_user.benutzername, tippt);
         Ok(())
     }
+}
+
+/// Ungelesene Nachrichten pro Chat für den angemeldeten Benutzer.
+/// Gezählt werden Nachrichten von anderen Personen, die nach der zuletzt gelesenen kommen.
+/// Chats ohne Ungelesenes fehlen in der Antwort.
+#[server(
+    GetUngeleseneChats,
+    "/api",
+    input = leptos::server_fn::codec::Json,
+    endpoint = "get_ungelesene_chats"
+)]
+pub async fn get_ungelesene_chats() -> Result<Vec<UngeleseneChat>, ServerFnError> {
+    #[cfg(feature = "ssr")]
+    {
+        use crate::backend::auth::require_current_user;
+        use sqlx::{PgPool, Row};
+
+        let current_user = require_current_user().await?;
+
+        if let Some(pool) = use_context::<PgPool>() {
+            let rows = sqlx::query(
+                r#"
+                SELECT r.chat_id, COUNT(n.id) AS anzahl
+                FROM rel_benutzer_chat r
+                LEFT JOIN chat_lesestand l
+                       ON l.benutzer_id = r.benutzer_id AND l.chat_id = r.chat_id
+                LEFT JOIN nachricht marker
+                       ON marker.id = l.letzte_nachricht_id
+                LEFT JOIN nachricht n
+                       ON n.chat_id = r.chat_id
+                      AND n.benutzer_id <> r.benutzer_id
+                      AND (marker.id IS NULL OR n.erstellt_am > marker.erstellt_am)
+                WHERE r.benutzer_id = $1
+                GROUP BY r.chat_id
+                HAVING COUNT(n.id) > 0
+                "#,
+            )
+            .bind(current_user.id)
+            .fetch_all(&pool)
+            .await
+            .map_err(|e| ServerFnError::new(format!("DB-Fehler (ungelesen): {e}")))?;
+
+            return Ok(rows
+                .into_iter()
+                .map(|r| UngeleseneChat {
+                    chat_id: r.get("chat_id"),
+                    anzahl: r.get::<i64, _>("anzahl") as u32,
+                })
+                .collect());
+        }
+
+        // In-Memory-Fallback: Nachrichten stehen in Eingangsreihenfolge im Speicher
+        let rel_guard = store::REL_BENUTZER_CHAT_MEMORY
+            .lock()
+            .map_err(|_| ServerFnError::new("Speicher-Lock fehlgeschlagen"))?;
+        let nachrichten_guard = store::NACHRICHTEN_MEMORY
+            .lock()
+            .map_err(|_| ServerFnError::new("Speicher-Lock fehlgeschlagen"))?;
+        let lesestand_guard = store::LESESTAND_MEMORY
+            .lock()
+            .map_err(|_| ServerFnError::new("Speicher-Lock fehlgeschlagen"))?;
+
+        let mut ergebnis = Vec::new();
+        for rel in rel_guard
+            .iter()
+            .filter(|r| r.benutzer_id == current_user.id)
+        {
+            let im_chat: Vec<&ChatNachricht> = nachrichten_guard
+                .iter()
+                .filter(|m| m.chat_id == rel.chat_id)
+                .collect();
+            let marker = lesestand_guard
+                .iter()
+                .find(|l| l.benutzer_id == current_user.id && l.chat_id == rel.chat_id)
+                .map(|l| l.letzte_nachricht_id);
+            let start = marker
+                .and_then(|mid| im_chat.iter().position(|m| m.id == mid))
+                .map(|p| p + 1)
+                .unwrap_or(0);
+            let anzahl = im_chat
+                .iter()
+                .skip(start)
+                .filter(|m| m.benutzer_id != current_user.id)
+                .count() as u32;
+            if anzahl > 0 {
+                ergebnis.push(UngeleseneChat {
+                    chat_id: rel.chat_id,
+                    anzahl,
+                });
+            }
+        }
+        Ok(ergebnis)
+    }
+
+    #[cfg(not(feature = "ssr"))]
+    unreachable!()
+}
+
+/// Merkt sich, dass der angemeldete Benutzer den Chat bis zu dieser Nachricht gelesen hat.
+#[server(
+    MarkiereChatGelesen,
+    "/api",
+    input = leptos::server_fn::codec::Json,
+    endpoint = "markiere_chat_gelesen"
+)]
+pub async fn markiere_chat_gelesen(
+    chat_id: Uuid,
+    letzte_nachricht_id: Uuid,
+) -> Result<(), ServerFnError> {
+    #[cfg(feature = "ssr")]
+    {
+        use crate::backend::auth::require_current_user;
+        use sqlx::PgPool;
+
+        let current_user = require_current_user().await?;
+        if !ist_chat_mitglied(chat_id, current_user.id).await? {
+            return Err(ServerFnError::new("Kein Zugriff auf diesen Chat."));
+        }
+
+        if let Some(pool) = use_context::<PgPool>() {
+            let gehoert_zum_chat =
+                sqlx::query("SELECT 1 FROM nachricht WHERE id = $1 AND chat_id = $2")
+                    .bind(letzte_nachricht_id)
+                    .bind(chat_id)
+                    .fetch_optional(&pool)
+                    .await
+                    .map_err(|e| ServerFnError::new(format!("DB-Fehler (nachricht): {e}")))?
+                    .is_some();
+            if !gehoert_zum_chat {
+                return Err(ServerFnError::new("Nachricht gehört nicht zu diesem Chat."));
+            }
+
+            sqlx::query(
+                r#"
+                INSERT INTO chat_lesestand (benutzer_id, chat_id, letzte_nachricht_id)
+                VALUES ($1, $2, $3)
+                ON CONFLICT (benutzer_id, chat_id)
+                DO UPDATE SET letzte_nachricht_id = EXCLUDED.letzte_nachricht_id
+                "#,
+            )
+            .bind(current_user.id)
+            .bind(chat_id)
+            .bind(letzte_nachricht_id)
+            .execute(&pool)
+            .await
+            .map_err(|e| ServerFnError::new(format!("DB-Fehler (chat_lesestand): {e}")))?;
+            return Ok(());
+        }
+
+        // In-Memory-Fallback
+        let nachricht_im_chat = store::NACHRICHTEN_MEMORY
+            .lock()
+            .map_err(|_| ServerFnError::new("Speicher-Lock fehlgeschlagen"))?
+            .iter()
+            .any(|m| m.id == letzte_nachricht_id && m.chat_id == chat_id);
+        if !nachricht_im_chat {
+            return Err(ServerFnError::new("Nachricht gehört nicht zu diesem Chat."));
+        }
+
+        let mut guard = store::LESESTAND_MEMORY
+            .lock()
+            .map_err(|_| ServerFnError::new("Speicher-Lock fehlgeschlagen"))?;
+        if let Some(eintrag) = guard
+            .iter_mut()
+            .find(|l| l.benutzer_id == current_user.id && l.chat_id == chat_id)
+        {
+            eintrag.letzte_nachricht_id = letzte_nachricht_id;
+        } else {
+            guard.push(store::StoredLesestand {
+                benutzer_id: current_user.id,
+                chat_id,
+                letzte_nachricht_id,
+            });
+        }
+    }
+
+    Ok(())
 }
 
 #[server(

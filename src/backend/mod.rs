@@ -43,4 +43,6 @@ pub fn register_server_functions() {
     register_explicit::<chat::SendChatNachricht>();
     register_explicit::<chat::ChatLiveAbfrage>();
     register_explicit::<chat::SetChatTippstatus>();
+    register_explicit::<chat::GetUngeleseneChats>();
+    register_explicit::<chat::MarkiereChatGelesen>();
 }
