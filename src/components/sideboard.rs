@@ -74,6 +74,14 @@ pub fn Sideboard(
                                         <span>"Fixkosten"</span>
                                     </a>
                                 </li>
+                                <li>
+                                    <a href="/monatskosten" on:click=move |_| on_navigate.run(()) class=move || nav_link_class("/monatskosten")>
+                                        <svg xmlns="http://www.w3.org/2000/svg" class=move || nav_icon_class("/monatskosten") fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18M10 3v18M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z" />
+                                        </svg>
+                                        <span>"Kosten pro Monat"</span>
+                                    </a>
+                                </li>
                             </ul>
                         </details>
                     </li>

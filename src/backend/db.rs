@@ -174,6 +174,20 @@ async fn run_schema_init(pool: &PgPool) -> Result<(), sqlx::Error> {
         .execute(pool)
         .await?;
 
+    // Erweiterung Fixkosten: Beginndatum, Kündigungsfrist (Monate), Zahlungsperiode und Status
+    for statement in [
+        // Bestehende Einträge erhalten ein frühes Beginndatum, damit sie in vergangenen Monaten weiter zählen
+        "ALTER TABLE fixkosten ADD COLUMN IF NOT EXISTS beginndatum DATE;",
+        "UPDATE fixkosten SET beginndatum = DATE '2000-01-01' WHERE beginndatum IS NULL;",
+        "ALTER TABLE fixkosten ALTER COLUMN beginndatum SET DEFAULT CURRENT_DATE;",
+        "ALTER TABLE fixkosten ALTER COLUMN beginndatum SET NOT NULL;",
+        "ALTER TABLE fixkosten ADD COLUMN IF NOT EXISTS kuendigungsfrist_monate INTEGER NOT NULL DEFAULT 0;",
+        "ALTER TABLE fixkosten ADD COLUMN IF NOT EXISTS zahlungsperiode TEXT NOT NULL DEFAULT 'Monatlich';",
+        "ALTER TABLE fixkosten ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'Aktiv';",
+    ] {
+        sqlx::query(statement).execute(pool).await?;
+    }
+
     // 4. Tabelle `aufgaben` (Felder: beschreibung, datum, erledigt) mit N:1-Relation zur Tabelle `benutzer`
     sqlx::query(
         r#"
