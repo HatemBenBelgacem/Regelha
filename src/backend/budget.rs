@@ -162,7 +162,12 @@ mod store {
     });
 }
 
-#[server(GetDashboardKennzahlen, "/api", endpoint = "get_dashboard_kennzahlen")]
+#[server(
+    GetDashboardKennzahlen,
+    "/api",
+    input = leptos::server_fn::codec::Json,
+    endpoint = "get_dashboard_kennzahlen"
+)]
 pub async fn get_dashboard_kennzahlen() -> Result<DashboardKennzahlen, ServerFnError> {
     // `get_buchungen` und `get_fixkosten` liefern ausschließlich die Einträge des angemeldeten Benutzers
     let buchungen = get_buchungen().await?;
@@ -225,7 +230,12 @@ pub async fn get_dashboard_kennzahlen() -> Result<DashboardKennzahlen, ServerFnE
     })
 }
 
-#[server(GetBuchungen, "/api", endpoint = "get_buchungen")]
+#[server(
+    GetBuchungen,
+    "/api",
+    input = leptos::server_fn::codec::Json,
+    endpoint = "get_buchungen"
+)]
 pub async fn get_buchungen() -> Result<Vec<Buchung>, ServerFnError> {
     #[cfg(feature = "ssr")]
     {
@@ -286,7 +296,12 @@ pub async fn get_buchungen() -> Result<Vec<Buchung>, ServerFnError> {
     }
 }
 
-#[server(AddBuchung, "/api", endpoint = "add_buchung")]
+#[server(
+    AddBuchung,
+    "/api",
+    input = leptos::server_fn::codec::Json,
+    endpoint = "add_buchung"
+)]
 pub async fn add_buchung(
     buchungstext: String,
     betrag: f64,
@@ -358,7 +373,12 @@ pub async fn add_buchung(
     unreachable!()
 }
 
-#[server(DeleteBuchung, "/api", endpoint = "delete_buchung")]
+#[server(
+    DeleteBuchung,
+    "/api",
+    input = leptos::server_fn::codec::Json,
+    endpoint = "delete_buchung"
+)]
 pub async fn delete_buchung(id: Uuid) -> Result<(), ServerFnError> {
     #[cfg(feature = "ssr")]
     {
@@ -386,7 +406,12 @@ pub async fn delete_buchung(id: Uuid) -> Result<(), ServerFnError> {
     Ok(())
 }
 
-#[server(GetFixkosten, "/api", endpoint = "get_fixkosten")]
+#[server(
+    GetFixkosten,
+    "/api",
+    input = leptos::server_fn::codec::Json,
+    endpoint = "get_fixkosten"
+)]
 pub async fn get_fixkosten() -> Result<Vec<FixkostenEintrag>, ServerFnError> {
     #[cfg(feature = "ssr")]
     {
@@ -439,7 +464,12 @@ pub async fn get_fixkosten() -> Result<Vec<FixkostenEintrag>, ServerFnError> {
     }
 }
 
-#[server(AddFixkosten, "/api", endpoint = "add_fixkosten")]
+#[server(
+    AddFixkosten,
+    "/api",
+    input = leptos::server_fn::codec::Json,
+    endpoint = "add_fixkosten"
+)]
 pub async fn add_fixkosten(
     buchungstext: String,
     betrag: f64,
@@ -495,7 +525,12 @@ pub async fn add_fixkosten(
     unreachable!()
 }
 
-#[server(DeleteFixkosten, "/api", endpoint = "delete_fixkosten")]
+#[server(
+    DeleteFixkosten,
+    "/api",
+    input = leptos::server_fn::codec::Json,
+    endpoint = "delete_fixkosten"
+)]
 pub async fn delete_fixkosten(id: Uuid) -> Result<(), ServerFnError> {
     #[cfg(feature = "ssr")]
     {

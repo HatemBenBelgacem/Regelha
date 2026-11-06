@@ -59,6 +59,8 @@ ENV RUST_LOG="info,regelha=info"
 ENV LEPTOS_SITE_ADDR="0.0.0.0:8080"
 ENV LEPTOS_SITE_ROOT="target/site"
 ENV PORT="8080"
+# SESSION_SECRET (Pflicht, mind. 32 Zeichen) NICHT hier setzen, sondern als Railway-Variable,
+# z. B. erzeugt mit `openssl rand -hex 32`. Ohne Secret beendet sich der Server beim Start.
 
 EXPOSE 8080
 

@@ -1,3 +1,11 @@
+# Benötigte Service-Variablen (Railway Dashboard -> Variables):
+#   DATABASE_URL    PostgreSQL-Verbindung
+#   ADMIN_PASSWORD  Passwort für das Konto "admin", mind. 12 Zeichen. Ist es gesetzt, wird es bei jedem Start übernommen.
+#                   Ohne diese Variable legt der Server in Produktion kein Admin-Konto an.
+#   SESSION_SECRET  HMAC-Schlüssel für Session-Tokens, mind. 32 Zeichen
+#                   (z. B. `openssl rand -hex 32`). Fehlt er, startet der Server nicht.
+#                   Ändern macht alle bestehenden Sessions (Web + App) ungültig.
+
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"

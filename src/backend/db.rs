@@ -1,5 +1,5 @@
 use leptos::logging::log;
-use sqlx::{migrate::MigrateDatabase, postgres::PgPoolOptions, PgPool, Postgres, Row};
+use sqlx::{migrate::MigrateDatabase, postgres::PgPoolOptions, PgPool, Postgres};
 
 pub async fn init_db_pool() -> Option<PgPool> {
     if let Ok(database_url) = std::env::var("DATABASE_URL") {
@@ -56,29 +56,51 @@ async fn run_schema_init(pool: &PgPool) -> Result<(), sqlx::Error> {
     .execute(pool)
     .await?;
 
-    // Standard-Benutzer "admin" (Passwort: "admin123") anlegen bzw. Hash aktualisieren
+    // Admin-Konto "admin". Ist ADMIN_PASSWORD gesetzt, gilt es als maßgeblich und wird bei jedem Start übernommen.
+    // Ohne ADMIN_PASSWORD wird das Konto nur angelegt, wenn es fehlt. Bestehende Passwörter bleiben unverändert.
     let default_admin_id = crate::backend::auth::default_admin_uuid();
-    let default_hash = crate::backend::auth::hash_password("admin", "admin123");
-    sqlx::query(
-        r#"
-        INSERT INTO benutzer (id, benutzername, passwort_hash)
-        VALUES ($1, $2, $3)
-        ON CONFLICT (benutzername) DO UPDATE SET passwort_hash = EXCLUDED.passwort_hash;
-        "#,
-    )
-    .bind(default_admin_id)
-    .bind("admin")
-    .bind(default_hash)
-    .execute(pool)
-    .await?;
+    if let Some(passwort) = crate::backend::auth::admin_passwort_aus_env() {
+        let hash = crate::backend::auth::hash_password(&passwort);
+        sqlx::query(
+            r#"
+            INSERT INTO benutzer (id, benutzername, passwort_hash)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (benutzername) DO UPDATE SET passwort_hash = EXCLUDED.passwort_hash;
+            "#,
+        )
+        .bind(default_admin_id)
+        .bind("admin")
+        .bind(hash)
+        .execute(pool)
+        .await?;
+    } else if let Some(passwort) = crate::backend::auth::dev_standardpasswort("admin") {
+        let hash = crate::backend::auth::hash_password(passwort);
+        sqlx::query(
+            r#"
+            INSERT INTO benutzer (id, benutzername, passwort_hash)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (benutzername) DO NOTHING;
+            "#,
+        )
+        .bind(default_admin_id)
+        .bind("admin")
+        .bind(hash)
+        .execute(pool)
+        .await?;
+    } else {
+        log!("Warnung: ADMIN_PASSWORD ist nicht gesetzt. Das Konto \"admin\" wird nicht angelegt oder geändert.");
+    }
 
-    // Zusätzliche Beispiel-Chatteilnehmer anlegen, falls noch nicht vorhanden
-    for (uid_u128, uname, upw) in [
-        (0x00000000_0000_4000_8000_000000000002u128, "anna", "anna123"),
-        (0x00000000_0000_4000_8000_000000000003u128, "lukas", "lukas123"),
+    // Beispiel-Chatteilnehmer nur in der Entwicklung anlegen, falls sie fehlen
+    for (uid_u128, uname) in [
+        (0x00000000_0000_4000_8000_000000000002u128, "anna"),
+        (0x00000000_0000_4000_8000_000000000003u128, "lukas"),
     ] {
+        let Some(passwort) = crate::backend::auth::dev_standardpasswort(uname) else {
+            continue;
+        };
         let uid = uuid::Uuid::from_u128(uid_u128);
-        let uhash = crate::backend::auth::hash_password(uname, upw);
+        let uhash = crate::backend::auth::hash_password(passwort);
         sqlx::query(
             r#"
             INSERT INTO benutzer (id, benutzername, passwort_hash)
@@ -93,11 +115,11 @@ async fn run_schema_init(pool: &PgPool) -> Result<(), sqlx::Error> {
         .await?;
     }
 
-    // Tatsächliche ID des "admin"-Benutzers abrufen (für Migration bestehender Datensätze)
-    let admin_row = sqlx::query("SELECT id FROM benutzer WHERE benutzername = 'admin'")
-        .fetch_one(pool)
-        .await?;
-    let admin_id: uuid::Uuid = admin_row.get("id");
+    // ID des "admin"-Benutzers für die Migration bestehender Datensätze. Fehlt das Konto, bleibt die Migration leer.
+    let admin_id: Option<uuid::Uuid> =
+        sqlx::query_scalar("SELECT id FROM benutzer WHERE benutzername = 'admin'")
+            .fetch_optional(pool)
+            .await?;
 
     // 2. Tabelle `buchungen` mit N:1-Fremdschlüssel `benutzer_id` zur Tabelle `benutzer`
     sqlx::query(

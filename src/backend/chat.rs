@@ -272,7 +272,12 @@ async fn load_chat_teilnehmer_db(
         .collect())
 }
 
-#[server(GetChatUebersicht, "/api", endpoint = "get_chat_uebersicht")]
+#[server(
+    GetChatUebersicht,
+    "/api",
+    input = leptos::server_fn::codec::Json,
+    endpoint = "get_chat_uebersicht"
+)]
 pub async fn get_chat_uebersicht() -> Result<ChatUebersicht, ServerFnError> {
     #[cfg(feature = "ssr")]
     {
@@ -388,7 +393,12 @@ pub async fn get_chat_uebersicht() -> Result<ChatUebersicht, ServerFnError> {
     }
 }
 
-#[server(OpenDirectChat, "/api", endpoint = "open_direct_chat")]
+#[server(
+    OpenDirectChat,
+    "/api",
+    input = leptos::server_fn::codec::Json,
+    endpoint = "open_direct_chat"
+)]
 pub async fn open_direct_chat(partner_id: Uuid) -> Result<ChatRaum, ServerFnError> {
     #[cfg(feature = "ssr")]
     {
@@ -706,7 +716,12 @@ pub async fn create_group_chat(
     unreachable!()
 }
 
-#[server(GetChatNachrichten, "/api", endpoint = "get_chat_nachrichten")]
+#[server(
+    GetChatNachrichten,
+    "/api",
+    input = leptos::server_fn::codec::Json,
+    endpoint = "get_chat_nachrichten"
+)]
 pub async fn get_chat_nachrichten(chat_id: Uuid) -> Result<Vec<ChatNachricht>, ServerFnError> {
     #[cfg(feature = "ssr")]
     {
@@ -780,7 +795,12 @@ pub async fn chat_live_abfrage(
 }
 
 /// Meldet, ob der aktuelle Benutzer im Chat gerade eine Nachricht schreibt.
-#[server(SetChatTippstatus, "/api", endpoint = "set_chat_tippstatus")]
+#[server(
+    SetChatTippstatus,
+    "/api",
+    input = leptos::server_fn::codec::Json,
+    endpoint = "set_chat_tippstatus"
+)]
 pub async fn set_chat_tippstatus(chat_id: Uuid, tippt: bool) -> Result<(), ServerFnError> {
     #[cfg(feature = "ssr")]
     {
