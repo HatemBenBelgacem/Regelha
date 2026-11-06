@@ -1,6 +1,7 @@
 use chrono::{Datelike, Local};
 use leptos::prelude::*;
 
+use crate::components::modal::Modal;
 use crate::backend::budget::{
     add_fixkosten, delete_fixkosten, get_fixkosten, kuendigungsfrist_text,
     update_fixkosten_status, FixkostenEintrag, FixkostenStatus, Zahlungsperiode,
@@ -29,6 +30,7 @@ pub fn FixkostenSection() -> impl IntoView {
     let (zahlungsperiode, set_zahlungsperiode) = signal(Zahlungsperiode::Monatlich);
     let (status, set_status) = signal(FixkostenStatus::Aktiv);
     let (error_msg, set_error_msg) = signal(Option::<String>::None);
+    let (modal_offen, set_modal_offen) = signal(false);
 
     let fixkosten_resource = Resource::new(|| (), |_| get_fixkosten());
 
@@ -64,6 +66,7 @@ pub fn FixkostenSection() -> impl IntoView {
                     set_buchungstext.set(String::new());
                     set_betrag_input.set(String::new());
                     set_error_msg.set(None);
+                    set_modal_offen.set(false);
                     fixkosten_resource.refetch();
                 }
                 Err(e) => set_error_msg.set(Some(e.to_string())),
@@ -114,111 +117,135 @@ pub fn FixkostenSection() -> impl IntoView {
     view! {
         <section class="card bg-base-100 shadow-sm border border-base-300">
             <div class="card-body p-4 sm:p-6 space-y-6">
-                <div>
-                    <h2 class="card-title text-lg sm:text-xl">"Fixkosten"</h2>
-                    <p class="text-xs sm:text-sm text-base-content/70">
-                        "Erfassung wiederkehrender Fixkosten in CHF (Miete, Krankenkasse, Abos) mit Vertragsdaten"
-                    </p>
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                        <h2 class="card-title text-lg sm:text-xl">"Fixkosten"</h2>
+                        <p class="text-xs sm:text-sm text-base-content/70">
+                            "Erfassung wiederkehrender Fixkosten in CHF (Miete, Krankenkasse, Abos) mit Vertragsdaten"
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        class="btn btn-secondary btn-sm self-start sm:self-auto"
+                        on:click=move |_| {
+                            set_error_msg.set(None);
+                            set_modal_offen.set(true);
+                        }
+                    >
+                        "+ Neue Fixkosten"
+                    </button>
                 </div>
 
-                // Formular zum Erfassen neuer Fixkosten (Responsives Grid)
-                <form on:submit=on_submit class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 bg-base-200/60 p-3 sm:p-4 rounded-box items-end">
-                    <div class="sm:col-span-2 lg:col-span-5">
-                        <label class="label py-1">
-                            <span class="label-text font-medium text-xs sm:text-sm">"Buchungstext"</span>
-                        </label>
-                        <input
-                            type="text"
-                            placeholder="z.B. Miete, Krankenkasse, Strom..."
-                            class="input input-bordered input-sm w-full"
-                            prop:value=move || buchungstext.get()
-                            on:input=move |ev| set_buchungstext.set(event_target_value(&ev))
-                            required
-                        />
-                    </div>
+                // Modalfenster zum Erfassen neuer Fixkosten
+                <Modal offen=modal_offen on_close=Callback::new(move |_| set_modal_offen.set(false)) titel="Neue Fixkosten">
+                    <form on:submit=on_submit class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div class="sm:col-span-2">
+                            <label class="label py-1">
+                                <span class="label-text font-medium text-sm">"Buchungstext"</span>
+                            </label>
+                            <input
+                                type="text"
+                                placeholder="z.B. Miete, Krankenkasse, Strom..."
+                                class="input input-bordered w-full"
+                                prop:value=move || buchungstext.get()
+                                on:input=move |ev| set_buchungstext.set(event_target_value(&ev))
+                                required
+                            />
+                        </div>
 
-                    <div class="sm:col-span-1 lg:col-span-3">
-                        <label class="label py-1">
-                            <span class="label-text font-medium text-xs sm:text-sm">"Betrag pro Periode (CHF)"</span>
-                        </label>
-                        <input
-                            type="text"
-                            inputmode="decimal"
-                            placeholder="0.00"
-                            class="input input-bordered input-sm w-full"
-                            prop:value=move || betrag_input.get()
-                            on:input=move |ev| set_betrag_input.set(event_target_value(&ev))
-                            required
-                        />
-                    </div>
+                        <div>
+                            <label class="label py-1">
+                                <span class="label-text font-medium text-sm">"Betrag pro Periode (CHF)"</span>
+                            </label>
+                            <input
+                                type="text"
+                                inputmode="decimal"
+                                placeholder="0.00"
+                                class="input input-bordered w-full"
+                                prop:value=move || betrag_input.get()
+                                on:input=move |ev| set_betrag_input.set(event_target_value(&ev))
+                                required
+                            />
+                        </div>
 
-                    <div class="sm:col-span-1 lg:col-span-4">
-                        <label class="label py-1">
-                            <span class="label-text font-medium text-xs sm:text-sm">"Zahlungsperiode"</span>
-                        </label>
-                        <select
-                            class="select select-bordered select-sm w-full"
-                            on:change=move |ev| set_zahlungsperiode.set(Zahlungsperiode::from_db_str(&event_target_value(&ev)))
-                        >
-                            {Zahlungsperiode::ALLE.into_iter().map(|p| view! {
-                                <option value=p.as_str() selected=move || zahlungsperiode.get() == p>{p.label()}</option>
-                            }).collect_view()}
-                        </select>
-                    </div>
+                        <div>
+                            <label class="label py-1">
+                                <span class="label-text font-medium text-sm">"Zahlungsperiode"</span>
+                            </label>
+                            <select
+                                class="select select-bordered w-full"
+                                on:change=move |ev| set_zahlungsperiode.set(Zahlungsperiode::from_db_str(&event_target_value(&ev)))
+                            >
+                                {Zahlungsperiode::ALLE.into_iter().map(|p| view! {
+                                    <option value=p.as_str() selected=move || zahlungsperiode.get() == p>{p.label()}</option>
+                                }).collect_view()}
+                            </select>
+                        </div>
 
-                    <div class="sm:col-span-1 lg:col-span-4">
-                        <label class="label py-1">
-                            <span class="label-text font-medium text-xs sm:text-sm">"Beginndatum"</span>
-                        </label>
-                        <input
-                            type="date"
-                            class="input input-bordered input-sm w-full"
-                            prop:value=move || beginndatum.get()
-                            on:input=move |ev| set_beginndatum.set(event_target_value(&ev))
-                            required
-                        />
-                    </div>
+                        <div>
+                            <label class="label py-1">
+                                <span class="label-text font-medium text-sm">"Beginndatum"</span>
+                            </label>
+                            <input
+                                type="date"
+                                class="input input-bordered w-full"
+                                prop:value=move || beginndatum.get()
+                                on:input=move |ev| set_beginndatum.set(event_target_value(&ev))
+                                required
+                            />
+                        </div>
 
-                    <div class="sm:col-span-1 lg:col-span-3">
-                        <label class="label py-1">
-                            <span class="label-text font-medium text-xs sm:text-sm">"Kündigungsfrist"</span>
-                        </label>
-                        <select
-                            class="select select-bordered select-sm w-full"
-                            on:change=move |ev| set_kuendigungsfrist.set(event_target_value(&ev).parse().unwrap_or(0))
-                        >
-                            {KUENDIGUNGSFRISTEN.into_iter().map(|m| view! {
-                                <option value=m.to_string() selected=move || kuendigungsfrist.get() == m>{kuendigungsfrist_text(m)}</option>
-                            }).collect_view()}
-                        </select>
-                    </div>
+                        <div>
+                            <label class="label py-1">
+                                <span class="label-text font-medium text-sm">"Kündigungsfrist"</span>
+                            </label>
+                            <select
+                                class="select select-bordered w-full"
+                                on:change=move |ev| set_kuendigungsfrist.set(event_target_value(&ev).parse().unwrap_or(0))
+                            >
+                                {KUENDIGUNGSFRISTEN.into_iter().map(|m| view! {
+                                    <option value=m.to_string() selected=move || kuendigungsfrist.get() == m>{kuendigungsfrist_text(m)}</option>
+                                }).collect_view()}
+                            </select>
+                        </div>
 
-                    <div class="sm:col-span-1 lg:col-span-3">
-                        <label class="label py-1">
-                            <span class="label-text font-medium text-xs sm:text-sm">"Status"</span>
-                        </label>
-                        <select
-                            class="select select-bordered select-sm w-full"
-                            on:change=move |ev| set_status.set(FixkostenStatus::from_db_str(&event_target_value(&ev)))
-                        >
-                            {FixkostenStatus::ALLE.into_iter().map(|s| view! {
-                                <option value=s.as_str() selected=move || status.get() == s>{s.label()}</option>
-                            }).collect_view()}
-                        </select>
-                    </div>
+                        <div>
+                            <label class="label py-1">
+                                <span class="label-text font-medium text-sm">"Status"</span>
+                            </label>
+                            <select
+                                class="select select-bordered w-full"
+                                on:change=move |ev| set_status.set(FixkostenStatus::from_db_str(&event_target_value(&ev)))
+                            >
+                                {FixkostenStatus::ALLE.into_iter().map(|s| view! {
+                                    <option value=s.as_str() selected=move || status.get() == s>{s.label()}</option>
+                                }).collect_view()}
+                            </select>
+                        </div>
 
-                    <div class="sm:col-span-1 lg:col-span-2">
-                        <button
-                            type="submit"
-                            class="btn btn-secondary btn-sm w-full"
-                            disabled=move || create_action.pending().get()
-                        >
-                            "Hinzufügen"
-                        </button>
-                    </div>
-                </form>
+                        {move || error_msg.get().map(|msg| view! {
+                            <div class="alert alert-warning py-2 text-sm sm:col-span-2">
+                                <span>{msg}</span>
+                            </div>
+                        })}
 
-                {move || error_msg.get().map(|msg| view! {
+                        <div class="modal-action sm:col-span-2 mt-2">
+                            <button type="button" class="btn btn-ghost" on:click=move |_| set_modal_offen.set(false)>
+                                "Abbrechen"
+                            </button>
+                            <button
+                                type="submit"
+                                class="btn btn-secondary"
+                                disabled=move || create_action.pending().get()
+                            >
+                                "Hinzufügen"
+                            </button>
+                        </div>
+                    </form>
+                </Modal>
+
+                // Fehler beim Ändern des Status (ausserhalb des Modalfensters)
+                {move || (!modal_offen.get()).then(|| error_msg.get()).flatten().map(|msg| view! {
                     <div class="alert alert-warning py-2 text-sm">
                         <span>{msg}</span>
                     </div>

@@ -1,6 +1,7 @@
 use chrono::Local;
 use leptos::prelude::*;
 
+use crate::components::modal::Modal;
 use crate::backend::budget::{add_buchung, delete_buchung, get_buchungen, BuchungsArt};
 
 #[component]
@@ -12,6 +13,7 @@ pub fn BuchungenSection() -> impl IntoView {
     let (art, set_art) = signal(BuchungsArt::Eingang);
     let (filter_art, set_filter_art) = signal(Option::<BuchungsArt>::None);
     let (error_msg, set_error_msg) = signal(Option::<String>::None);
+    let (modal_offen, set_modal_offen) = signal(false);
 
     let buchungen_resource = Resource::new(|| (), |_| get_buchungen());
 
@@ -37,6 +39,7 @@ pub fn BuchungenSection() -> impl IntoView {
                     set_buchungstext.set(String::new());
                     set_betrag_input.set(String::new());
                     set_error_msg.set(None);
+                    set_modal_offen.set(false);
                     buchungen_resource.refetch();
                 }
                 Err(e) => set_error_msg.set(Some(e.to_string())),
@@ -79,6 +82,18 @@ pub fn BuchungenSection() -> impl IntoView {
                         </p>
                     </div>
 
+                    <div class="flex flex-wrap items-center gap-2">
+                    <button
+                        type="button"
+                        class="btn btn-primary btn-sm"
+                        on:click=move |_| {
+                            set_error_msg.set(None);
+                            set_modal_offen.set(true);
+                        }
+                    >
+                        "+ Neue Buchung"
+                    </button>
+
                     // Filter: Alle / Zahlungseingänge / Zahlungsausgänge
                     <div class="join flex flex-wrap">
                         <button
@@ -103,90 +118,96 @@ pub fn BuchungenSection() -> impl IntoView {
                             "Ausgänge"
                         </button>
                     </div>
+                    </div>
                 </div>
 
-                // Formular zum Erfassen neuer Buchungen (inkl. Datum, Buchungstext, Betrag)
-                <form on:submit=on_submit class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 bg-base-200/60 p-3 sm:p-4 rounded-box items-end">
-                    <div class="sm:col-span-1 lg:col-span-3">
-                        <label class="label py-1">
-                            <span class="label-text font-medium text-xs sm:text-sm">"Buchungsart"</span>
-                        </label>
-                        <div class="join w-full">
-                            <button
-                                type="button"
-                                class=move || format!("btn btn-sm join-item flex-1 {}", if art.get() == BuchungsArt::Eingang { "btn-success" } else { "btn-outline" })
-                                on:click=move |_| set_art.set(BuchungsArt::Eingang)
-                            >
-                                "+ Eingang"
+                // Modalfenster zum Erfassen neuer Buchungen (inkl. Datum, Buchungstext, Betrag)
+                <Modal offen=modal_offen on_close=Callback::new(move |_| set_modal_offen.set(false)) titel="Neue Buchung">
+                    <form on:submit=on_submit class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div class="sm:col-span-2">
+                            <label class="label py-1">
+                                <span class="label-text font-medium text-sm">"Buchungsart"</span>
+                            </label>
+                            <div class="join w-full">
+                                <button
+                                    type="button"
+                                    class=move || format!("btn join-item flex-1 {}", if art.get() == BuchungsArt::Eingang { "btn-success" } else { "btn-outline" })
+                                    on:click=move |_| set_art.set(BuchungsArt::Eingang)
+                                >
+                                    "+ Eingang"
+                                </button>
+                                <button
+                                    type="button"
+                                    class=move || format!("btn join-item flex-1 {}", if art.get() == BuchungsArt::Ausgang { "btn-error" } else { "btn-outline" })
+                                    on:click=move |_| set_art.set(BuchungsArt::Ausgang)
+                                >
+                                    "- Ausgang"
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="sm:col-span-2">
+                            <label class="label py-1">
+                                <span class="label-text font-medium text-sm">"Buchungstext"</span>
+                            </label>
+                            <input
+                                type="text"
+                                placeholder="z.B. Lohn, Einkauf, Rückerstattung..."
+                                class="input input-bordered w-full"
+                                prop:value=move || buchungstext.get()
+                                on:input=move |ev| set_buchungstext.set(event_target_value(&ev))
+                                required
+                            />
+                        </div>
+
+                        <div>
+                            <label class="label py-1">
+                                <span class="label-text font-medium text-sm">"Datum"</span>
+                            </label>
+                            <input
+                                type="date"
+                                class="input input-bordered w-full"
+                                prop:value=move || datum_input.get()
+                                on:input=move |ev| set_datum_input.set(event_target_value(&ev))
+                                required
+                            />
+                        </div>
+
+                        <div>
+                            <label class="label py-1">
+                                <span class="label-text font-medium text-sm">"Betrag (CHF)"</span>
+                            </label>
+                            <input
+                                type="text"
+                                inputmode="decimal"
+                                placeholder="0.00"
+                                class="input input-bordered w-full"
+                                prop:value=move || betrag_input.get()
+                                on:input=move |ev| set_betrag_input.set(event_target_value(&ev))
+                                required
+                            />
+                        </div>
+
+                        {move || error_msg.get().map(|msg| view! {
+                            <div class="alert alert-warning py-2 text-sm sm:col-span-2">
+                                <span>{msg}</span>
+                            </div>
+                        })}
+
+                        <div class="modal-action sm:col-span-2 mt-2">
+                            <button type="button" class="btn btn-ghost" on:click=move |_| set_modal_offen.set(false)>
+                                "Abbrechen"
                             </button>
                             <button
-                                type="button"
-                                class=move || format!("btn btn-sm join-item flex-1 {}", if art.get() == BuchungsArt::Ausgang { "btn-error" } else { "btn-outline" })
-                                on:click=move |_| set_art.set(BuchungsArt::Ausgang)
+                                type="submit"
+                                class="btn btn-primary"
+                                disabled=move || create_action.pending().get()
                             >
-                                "- Ausgang"
+                                "Verbuchen"
                             </button>
                         </div>
-                    </div>
-
-                    <div class="sm:col-span-1 lg:col-span-2">
-                        <label class="label py-1">
-                            <span class="label-text font-medium text-xs sm:text-sm">"Datum"</span>
-                        </label>
-                        <input
-                            type="date"
-                            class="input input-bordered input-sm w-full"
-                            prop:value=move || datum_input.get()
-                            on:input=move |ev| set_datum_input.set(event_target_value(&ev))
-                            required
-                        />
-                    </div>
-
-                    <div class="sm:col-span-2 lg:col-span-3">
-                        <label class="label py-1">
-                            <span class="label-text font-medium text-xs sm:text-sm">"Buchungstext"</span>
-                        </label>
-                        <input
-                            type="text"
-                            placeholder="z.B. Lohn, Einkauf, Rückerstattung..."
-                            class="input input-bordered input-sm w-full"
-                            prop:value=move || buchungstext.get()
-                            on:input=move |ev| set_buchungstext.set(event_target_value(&ev))
-                            required
-                        />
-                    </div>
-
-                    <div class="sm:col-span-1 lg:col-span-2">
-                        <label class="label py-1">
-                            <span class="label-text font-medium text-xs sm:text-sm">"Betrag (CHF)"</span>
-                        </label>
-                        <input
-                            type="text"
-                            inputmode="decimal"
-                            placeholder="0.00"
-                            class="input input-bordered input-sm w-full"
-                            prop:value=move || betrag_input.get()
-                            on:input=move |ev| set_betrag_input.set(event_target_value(&ev))
-                            required
-                        />
-                    </div>
-
-                    <div class="sm:col-span-1 lg:col-span-2">
-                        <button
-                            type="submit"
-                            class="btn btn-primary btn-sm w-full"
-                            disabled=move || create_action.pending().get()
-                        >
-                            "Verbuchen"
-                        </button>
-                    </div>
-                </form>
-
-                {move || error_msg.get().map(|msg| view! {
-                    <div class="alert alert-warning py-2 text-sm">
-                        <span>{msg}</span>
-                    </div>
-                })}
+                    </form>
+                </Modal>
 
                 // Buchungstabelle (Spalten: Datum, Buchungstext, Benutzer, Betrag)
                 <div class="overflow-x-auto -mx-2 sm:mx-0">
