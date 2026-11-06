@@ -13,8 +13,9 @@ pub fn Modal(
     offen: Signal<bool>,
     /// Wird beim Schliessen aufgerufen (✕, Hintergrund, Escape)
     on_close: Callback<()>,
-    /// Überschrift des Fensters
-    titel: &'static str,
+    /// Überschrift des Fensters (kann sich ändern, z.B. "Neue Buchung" / "Buchung bearbeiten")
+    #[prop(into)]
+    titel: Signal<String>,
     children: ChildrenFn,
 ) -> impl IntoView {
     let children = StoredValue::new(children);
@@ -25,7 +26,7 @@ pub fn Modal(
                 class="modal modal-open modal-bottom sm:modal-middle"
                 role="dialog"
                 aria-modal="true"
-                aria-label=titel
+                aria-label=move || titel.get()
                 on:keydown=move |ev| {
                     if ev.key() == "Escape" {
                         on_close.run(());
@@ -34,7 +35,7 @@ pub fn Modal(
             >
                 <div class="modal-box w-full sm:max-w-2xl p-4 sm:p-6">
                     <div class="flex items-center justify-between gap-2 mb-4">
-                        <h3 class="font-bold text-lg text-[#66023C]">{titel}</h3>
+                        <h3 class="font-bold text-lg text-[#66023C]">{move || titel.get()}</h3>
                         <button
                             type="button"
                             class="btn btn-sm btn-circle btn-ghost"

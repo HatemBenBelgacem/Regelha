@@ -440,6 +440,31 @@ pub async fn get_buchungen() -> Result<Vec<Buchung>, ServerFnError> {
     }
 }
 
+/// Prüft Buchungstext und Betrag (für Buchungen und Fixkosten).
+/// Gibt den bereinigten Buchungstext zurück.
+#[cfg(feature = "ssr")]
+fn pruefe_text_und_betrag(buchungstext: &str, betrag: f64) -> Result<String, ServerFnError> {
+    let trimmed = buchungstext.trim().to_string();
+    if trimmed.is_empty() {
+        return Err(ServerFnError::new("Bitte einen Buchungstext eingeben."));
+    }
+    if betrag <= 0.0 || !betrag.is_finite() {
+        return Err(ServerFnError::new(
+            "Bitte einen gültigen positiven Betrag eingeben.",
+        ));
+    }
+    Ok(trimmed)
+}
+
+/// Liest ein Datum im Format JJJJ-MM-TT (aus dem Formular) oder TT.MM.JJJJ.
+#[cfg(feature = "ssr")]
+fn parse_datum(text: &str, fehlertext: &str) -> Result<NaiveDate, ServerFnError> {
+    let text = text.trim();
+    NaiveDate::parse_from_str(text, "%Y-%m-%d")
+        .or_else(|_| NaiveDate::parse_from_str(text, "%d.%m.%Y"))
+        .map_err(|_| ServerFnError::new(fehlertext))
+}
+
 #[server(
     AddBuchung,
     "/api",
@@ -452,20 +477,10 @@ pub async fn add_buchung(
     art: BuchungsArt,
     datum: Option<String>,
 ) -> Result<Buchung, ServerFnError> {
-    let trimmed = buchungstext.trim().to_string();
-    if trimmed.is_empty() {
-        return Err(ServerFnError::new("Bitte einen Buchungstext eingeben."));
-    }
-    if betrag <= 0.0 || !betrag.is_finite() {
-        return Err(ServerFnError::new(
-            "Bitte einen gültigen positiven Betrag eingeben.",
-        ));
-    }
+    let trimmed = pruefe_text_und_betrag(&buchungstext, betrag)?;
 
     let buchungs_datum = match datum.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
-        Some(d_str) => NaiveDate::parse_from_str(d_str, "%Y-%m-%d")
-            .or_else(|_| NaiveDate::parse_from_str(d_str, "%d.%m.%Y"))
-            .map_err(|_| ServerFnError::new("Bitte ein gültiges Datum auswählen."))?,
+        Some(d_str) => parse_datum(d_str, "Bitte ein gültiges Datum auswählen.")?,
         None => Local::now().date_naive(),
     };
 
@@ -515,6 +530,65 @@ pub async fn add_buchung(
 
     #[cfg(not(feature = "ssr"))]
     unreachable!()
+}
+
+#[server(
+    UpdateBuchung,
+    "/api",
+    input = leptos::server_fn::codec::Json,
+    endpoint = "update_buchung"
+)]
+pub async fn update_buchung(
+    id: Uuid,
+    buchungstext: String,
+    betrag: f64,
+    art: BuchungsArt,
+    datum: String,
+) -> Result<(), ServerFnError> {
+    let trimmed = pruefe_text_und_betrag(&buchungstext, betrag)?;
+    let erstellt_am = parse_datum(&datum, "Bitte ein gültiges Datum auswählen.")?;
+
+    #[cfg(feature = "ssr")]
+    {
+        use crate::backend::auth::require_current_user;
+        use sqlx::PgPool;
+
+        let current_user = require_current_user().await?;
+
+        if let Some(pool) = use_context::<PgPool>() {
+            sqlx::query(
+                r#"
+                UPDATE buchungen
+                SET buchungstext = $1, betrag = $2, art = $3, erstellt_am = $4
+                WHERE id = $5 AND benutzer_id = $6
+                "#,
+            )
+            .bind(&trimmed)
+            .bind(betrag.abs())
+            .bind(art.as_str())
+            .bind(erstellt_am)
+            .bind(id)
+            .bind(current_user.id)
+            .execute(&pool)
+            .await
+            .map_err(|e| ServerFnError::new(format!("DB-Update fehlgeschlagen: {e}")))?;
+            return Ok(());
+        }
+
+        let mut guard = store::BUCHUNGEN_MEMORY
+            .lock()
+            .map_err(|_| ServerFnError::new("Speicher-Lock fehlgeschlagen"))?;
+        if let Some(b) = guard.iter_mut().find(|b| {
+            b.id == id && (b.benutzer_id == current_user.id || b.benutzer == current_user.benutzername)
+        }) {
+            b.buchungstext = trimmed;
+            b.betrag = betrag.abs();
+            b.art = art;
+            b.erstellt_am = erstellt_am;
+        }
+    }
+
+    Ok(())
 }
 
 #[server(
@@ -633,23 +707,13 @@ pub async fn add_fixkosten(
     zahlungsperiode: Zahlungsperiode,
     status: FixkostenStatus,
 ) -> Result<FixkostenEintrag, ServerFnError> {
-    let trimmed = buchungstext.trim().to_string();
-    if trimmed.is_empty() {
-        return Err(ServerFnError::new("Bitte einen Buchungstext eingeben."));
-    }
-    if betrag <= 0.0 || !betrag.is_finite() {
-        return Err(ServerFnError::new(
-            "Bitte einen gültigen positiven Betrag eingeben.",
-        ));
-    }
+    let trimmed = pruefe_text_und_betrag(&buchungstext, betrag)?;
     if !(0..=36).contains(&kuendigungsfrist_monate) {
         return Err(ServerFnError::new(
             "Die Kündigungsfrist muss zwischen 0 und 36 Monaten liegen.",
         ));
     }
-    let beginndatum = NaiveDate::parse_from_str(beginndatum.trim(), "%Y-%m-%d")
-        .or_else(|_| NaiveDate::parse_from_str(beginndatum.trim(), "%d.%m.%Y"))
-        .map_err(|_| ServerFnError::new("Bitte ein gültiges Beginndatum auswählen."))?;
+    let beginndatum = parse_datum(&beginndatum, "Bitte ein gültiges Beginndatum auswählen.")?;
 
     #[cfg(feature = "ssr")]
     {
@@ -702,6 +766,77 @@ pub async fn add_fixkosten(
 
     #[cfg(not(feature = "ssr"))]
     unreachable!()
+}
+
+#[server(
+    UpdateFixkosten,
+    "/api",
+    input = leptos::server_fn::codec::Json,
+    endpoint = "update_fixkosten"
+)]
+pub async fn update_fixkosten(
+    id: Uuid,
+    buchungstext: String,
+    betrag: f64,
+    beginndatum: String,
+    kuendigungsfrist_monate: i32,
+    zahlungsperiode: Zahlungsperiode,
+    status: FixkostenStatus,
+) -> Result<(), ServerFnError> {
+    let trimmed = pruefe_text_und_betrag(&buchungstext, betrag)?;
+    if !(0..=36).contains(&kuendigungsfrist_monate) {
+        return Err(ServerFnError::new(
+            "Die Kündigungsfrist muss zwischen 0 und 36 Monaten liegen.",
+        ));
+    }
+    let beginn = parse_datum(&beginndatum, "Bitte ein gültiges Beginndatum auswählen.")?;
+
+    #[cfg(feature = "ssr")]
+    {
+        use crate::backend::auth::require_current_user;
+        use sqlx::PgPool;
+
+        let current_user = require_current_user().await?;
+
+        if let Some(pool) = use_context::<PgPool>() {
+            sqlx::query(
+                r#"
+                UPDATE fixkosten
+                SET buchungstext = $1, betrag = $2, beginndatum = $3,
+                    kuendigungsfrist_monate = $4, zahlungsperiode = $5, status = $6
+                WHERE id = $7 AND benutzer_id = $8
+                "#,
+            )
+            .bind(&trimmed)
+            .bind(betrag.abs())
+            .bind(beginn)
+            .bind(kuendigungsfrist_monate)
+            .bind(zahlungsperiode.as_str())
+            .bind(status.as_str())
+            .bind(id)
+            .bind(current_user.id)
+            .execute(&pool)
+            .await
+            .map_err(|e| ServerFnError::new(format!("DB-Update fehlgeschlagen: {e}")))?;
+            return Ok(());
+        }
+
+        let mut guard = store::FIXKOSTEN_MEMORY
+            .lock()
+            .map_err(|_| ServerFnError::new("Speicher-Lock fehlgeschlagen"))?;
+        if let Some(f) = guard.iter_mut().find(|f| {
+            f.id == id && (f.benutzer_id == current_user.id || f.benutzer == current_user.benutzername)
+        }) {
+            f.buchungstext = trimmed;
+            f.betrag = betrag.abs();
+            f.beginndatum = beginn;
+            f.kuendigungsfrist_monate = kuendigungsfrist_monate;
+            f.zahlungsperiode = zahlungsperiode;
+            f.status = status;
+        }
+    }
+
+    Ok(())
 }
 
 #[server(

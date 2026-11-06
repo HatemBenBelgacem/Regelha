@@ -991,7 +991,7 @@ pub fn ChatSection() -> impl IntoView {
             <Modal
                 offen=show_group_form
                 on_close=Callback::new(move |_| set_show_group_form.set(false))
-                titel="Neuer Gruppenchat"
+                titel=move || "Neuer Gruppenchat".to_string()
             >
                         <form
                             on:submit=on_create_group_submit

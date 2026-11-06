@@ -177,6 +177,63 @@ pub async fn add_aufgabe(
 }
 
 #[server(
+    UpdateAufgabe,
+    "/api",
+    input = leptos::server_fn::codec::Json,
+    endpoint = "update_aufgabe"
+)]
+pub async fn update_aufgabe(
+    id: Uuid,
+    beschreibung: String,
+    datum: String,
+) -> Result<(), ServerFnError> {
+    let trimmed = beschreibung.trim().to_string();
+    if trimmed.is_empty() {
+        return Err(ServerFnError::new(
+            "Bitte eine Beschreibung für die Aufgabe eingeben.",
+        ));
+    }
+    let aufgaben_datum = NaiveDate::parse_from_str(datum.trim(), "%Y-%m-%d")
+        .or_else(|_| NaiveDate::parse_from_str(datum.trim(), "%d.%m.%Y"))
+        .map_err(|_| ServerFnError::new("Bitte ein gültiges Datum auswählen."))?;
+
+    #[cfg(feature = "ssr")]
+    {
+        use crate::backend::auth::require_current_user;
+        use sqlx::PgPool;
+
+        let current_user = require_current_user().await?;
+
+        if let Some(pool) = use_context::<PgPool>() {
+            sqlx::query(
+                "UPDATE aufgaben SET beschreibung = $1, datum = $2 WHERE id = $3 AND benutzer_id = $4",
+            )
+            .bind(&trimmed)
+            .bind(aufgaben_datum)
+            .bind(id)
+            .bind(current_user.id)
+            .execute(&pool)
+            .await
+            .map_err(|e| ServerFnError::new(format!("DB-Update fehlgeschlagen: {e}")))?;
+            return Ok(());
+        }
+
+        let mut guard = store::AUFGABEN_MEMORY
+            .lock()
+            .map_err(|_| ServerFnError::new("Speicher-Lock fehlgeschlagen"))?;
+        if let Some(a) = guard.iter_mut().find(|a| {
+            a.id == id
+                && (a.benutzer_id == current_user.id || a.benutzer == current_user.benutzername)
+        }) {
+            a.beschreibung = trimmed;
+            a.datum = aufgaben_datum;
+        }
+    }
+
+    Ok(())
+}
+
+#[server(
     ToggleAufgabeErledigt,
     "/api",
     input = leptos::server_fn::codec::Json,
