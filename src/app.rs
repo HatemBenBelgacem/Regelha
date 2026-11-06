@@ -11,6 +11,9 @@ use crate::components::{
     monatskosten::MonatskostenSection,
 };
 
+/// Meldet den Service Worker an (für die Installation als App). Läuft nach dem Laden der Seite.
+const SW_REGISTRIERUNG: &str = "if ('serviceWorker' in navigator) { window.addEventListener('load', function () { navigator.serviceWorker.register('/sw.js'); }); }";
+
 pub fn shell(options: LeptosOptions) -> impl IntoView {
     view! {
         <!DOCTYPE html>
@@ -18,9 +21,17 @@ pub fn shell(options: LeptosOptions) -> impl IntoView {
             <head>
                 <meta charset="utf-8"/>
                 <meta name="viewport" content="width=device-width, initial-scale=1"/>
+                // PWA: Installation als App auf dem Handy
+                <meta name="theme-color" content="#66023C"/>
+                <meta name="apple-mobile-web-app-capable" content="yes"/>
+                <meta name="apple-mobile-web-app-title" content="Regelha"/>
+                <link rel="manifest" href="/manifest.json"/>
+                <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png"/>
+                <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png"/>
                 <AutoReload options=options.clone() />
                 <HydrationScripts options/>
                 <MetaTags/>
+                <script inner_html=SW_REGISTRIERUNG></script>
             </head>
             <body class="min-h-screen bg-[#F8FAFC] text-base-content">
                 <App/>
