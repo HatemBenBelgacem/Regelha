@@ -280,5 +280,19 @@ async fn run_schema_init(pool: &PgPool) -> Result<(), sqlx::Error> {
     .execute(pool)
     .await?;
 
+    // 8. Tabelle `chat_lesestand` (zuletzt gelesene Nachricht je Benutzer und Chat, für Ungelesen-Zähler)
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS chat_lesestand (
+            benutzer_id UUID NOT NULL REFERENCES benutzer(id) ON DELETE CASCADE,
+            chat_id UUID NOT NULL REFERENCES chat(id) ON DELETE CASCADE,
+            letzte_nachricht_id UUID,
+            PRIMARY KEY (benutzer_id, chat_id)
+        );
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
     Ok(())
 }

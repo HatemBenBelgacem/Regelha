@@ -3,12 +3,21 @@ use leptos_router::nested_router::Outlet;
 
 use crate::{
     backend::auth::{get_current_user, logout_user, AuthUser},
-    components::{header::Header, login::LoginMaske, sideboard::Sideboard},
+    components::{
+        chat::{Ungelesene, UngeleseneAbfrage},
+        header::Header,
+        login::LoginMaske,
+        sideboard::Sideboard,
+    },
 };
 
 #[component]
 pub fn AppLayout() -> impl IntoView {
     let user_resource = Resource::new(|| (), |_| get_current_user());
+
+    // Ungelesene Chats: zentral an Seitenleiste und Chat-Seite weitergeben
+    let ungelesene: Ungelesene = RwSignal::new(Vec::new());
+    provide_context(ungelesene);
     let (current_user_override, set_current_user_override) = signal(Option::<Option<AuthUser>>::None);
 
     let logout_action = Action::new(move |_: &()| async move { logout_user().await });
@@ -51,6 +60,9 @@ pub fn AppLayout() -> impl IntoView {
                         <div class="min-h-screen flex flex-col bg-[#F8FAFC] text-base-content">
                             // 1. Header inkl. Menüband
                             <Header user=user on_logout=on_logout/>
+
+                            // Ungelesen-Zähler nur aktualisieren, solange jemand angemeldet ist
+                            <UngeleseneAbfrage ungelesene=ungelesene/>
 
                             // 2. Sideboard + 3. Content (Responsives Drawer-Layout)
                             <div class="drawer lg:drawer-open flex-1">

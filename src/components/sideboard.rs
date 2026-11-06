@@ -1,12 +1,16 @@
 use leptos::prelude::*;
 use leptos_router::hooks::use_url;
 
+use crate::components::chat::{ungelesen_gesamt, Ungelesene};
+
 #[component]
 pub fn Sideboard(
     /// Wird bei jedem Klick auf einen Menüpunkt aufgerufen (schliesst den Drawer auf dem Smartphone)
     on_navigate: Callback<()>,
 ) -> impl IntoView {
     let url = use_url();
+    // Ungelesene Chats (kommt aus AppLayout), für den Zähler am Menüpunkt "Chat"
+    let ungelesene = use_context::<Ungelesene>();
     // Nur das Icon und der Text des aktiven Menüpunkts werden lila (#66023C / #7A2048) eingefärbt
     let nav_link_class = move |path: &str| {
         if url.with(|u| u.path() == path) {
@@ -103,6 +107,12 @@ pub fn Sideboard(
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                             </svg>
                             <span>"Chat"</span>
+                            {move || {
+                                let anzahl = ungelesene.map(ungelesen_gesamt).unwrap_or(0);
+                                (anzahl > 0).then(|| view! {
+                                    <span class="badge badge-error badge-sm text-white ml-auto">{anzahl}</span>
+                                })
+                            }}
                         </a>
                     </li>
                 </ul>

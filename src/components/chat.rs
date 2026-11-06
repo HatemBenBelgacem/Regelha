@@ -1,5 +1,5 @@
 use std::sync::{
-    atomic::{AtomicU64, Ordering},
+    atomic::{AtomicBool, AtomicU64, Ordering},
     Arc,
 };
 use std::time::Duration;
@@ -10,8 +10,74 @@ use uuid::Uuid;
 use crate::components::modal::Modal;
 use crate::backend::chat::{
     chat_live_abfrage, create_group_chat, get_chat_nachrichten, get_chat_uebersicht,
-    open_direct_chat, send_chat_nachricht, set_chat_tippstatus, ChatNachricht, ChatRaum,
+    get_ungelesene_chats, markiere_chat_gelesen, open_direct_chat, send_chat_nachricht,
+    set_chat_tippstatus, ChatNachricht, ChatRaum, UngeleseneChat,
 };
+
+/// Ungelesene Nachrichten pro Chat. Wird von der Seitenleiste und der Chat-Seite gemeinsam genutzt.
+pub type Ungelesene = RwSignal<Vec<UngeleseneChat>>;
+
+/// Gesamtzahl aller ungelesenen Nachrichten (für den Menüpunkt „Chat“).
+pub fn ungelesen_gesamt(ungelesene: Ungelesene) -> u32 {
+    ungelesene.with(|liste| liste.iter().map(|c| c.anzahl).sum())
+}
+
+/// Ungelesene Nachrichten eines einzelnen Chats.
+pub fn ungelesen_in_chat(ungelesene: Ungelesene, chat_id: Uuid) -> u32 {
+    ungelesene.with(|liste| {
+        liste
+            .iter()
+            .find(|c| c.chat_id == chat_id)
+            .map(|c| c.anzahl)
+            .unwrap_or(0)
+    })
+}
+
+/// Holt die ungelesenen Chats neu. Fehler (z.B. abgemeldet) ergeben „nichts ungelesen“.
+async fn aktualisiere_ungelesene(ungelesene: Ungelesene) {
+    let liste = get_ungelesene_chats().await.unwrap_or_default();
+    ungelesene.set(liste);
+}
+
+/// Startet die regelmäßige Abfrage der ungelesenen Chats (alle 10 Sekunden).
+/// Die Schleife endet, sobald `aktiv` auf false gesetzt wird (z.B. beim Abmelden).
+fn starte_ungelesen_abfrage(ungelesene: Ungelesene, aktiv: Arc<AtomicBool>) {
+    spawn_local(async move {
+        if !aktiv.load(Ordering::SeqCst) {
+            return;
+        }
+        aktualisiere_ungelesene(ungelesene).await;
+        set_timeout(
+            move || {
+                if aktiv.load(Ordering::SeqCst) {
+                    starte_ungelesen_abfrage(ungelesene, aktiv);
+                }
+            },
+            Duration::from_secs(10),
+        );
+    });
+}
+
+/// Hält die Ungelesen-Zähler aktuell, solange jemand angemeldet ist.
+/// Wird nur im angemeldeten Bereich eingebunden und zeigt selbst nichts an.
+#[component]
+pub fn UngeleseneAbfrage(ungelesene: Ungelesene) -> impl IntoView {
+    let aktiv = Arc::new(AtomicBool::new(true));
+    {
+        let aktiv = aktiv.clone();
+        on_cleanup(move || aktiv.store(false, Ordering::SeqCst));
+    }
+    Effect::new(move |_| starte_ungelesen_abfrage(ungelesene, aktiv.clone()));
+}
+
+/// Merkt sich den gelesenen Stand eines Chats und aktualisiert danach die Zähler.
+fn markiere_gelesen(chat_id: Uuid, nachricht_id: Uuid, ungelesene: Ungelesene) {
+    spawn_local(async move {
+        if markiere_chat_gelesen(chat_id, nachricht_id).await.is_ok() {
+            aktualisiere_ungelesene(ungelesene).await;
+        }
+    });
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct PendingAnhang {
@@ -128,6 +194,7 @@ mod file_bridge {
 struct LiveSignale {
     nachrichten: RwSignal<Vec<ChatNachricht>>,
     tippende: RwSignal<Vec<String>>,
+    ungelesene: Ungelesene,
 }
 
 /// Fügt Nachrichten an, die noch nicht in der Liste sind (Duplikate über die ID erkannt).
@@ -158,6 +225,10 @@ fn live_abfrage(
         }
         match res {
             Ok(status) => {
+                // Der Chat ist offen: neu eingetroffene Nachrichten gelten als gelesen
+                if let Some(letzte_neu) = status.neue_nachrichten.last().map(|m| m.id) {
+                    markiere_gelesen(chat_id, letzte_neu, signale.ungelesene);
+                }
                 let letzte_id = status.neue_nachrichten.last().map(|m| m.id).or(letzte_id);
                 if !status.neue_nachrichten.is_empty() {
                     signale
@@ -242,9 +313,13 @@ pub fn ChatSection() -> impl IntoView {
     let nachrichten = RwSignal::new(Vec::<ChatNachricht>::new());
     let tippende = RwSignal::new(Vec::<String>::new());
     let geladen_fuer = RwSignal::new(Option::<Uuid>::None);
+    // Gemeinsamer Ungelesen-Zähler (kommt aus AppLayout)
+    let ungelesene: Ungelesene =
+        use_context::<Ungelesene>().unwrap_or_else(|| RwSignal::new(Vec::new()));
     let signale = LiveSignale {
         nachrichten,
         tippende,
+        ungelesene,
     };
     // Zeitpunkt (ms) der letzten "tippt"-Meldung an den Server, 0 = keine aktiv
     let letzte_tipp_meldung = StoredValue::new(0_i64);
@@ -289,6 +364,10 @@ pub fn ChatSection() -> impl IntoView {
                         let letzte_id = list.last().map(|m| m.id);
                         nachrichten.try_set(list);
                         geladen_fuer.try_set(Some(cid));
+                        // Der Chat ist jetzt offen: alles bis zur letzten Nachricht gilt als gelesen
+                        if let Some(id) = letzte_id {
+                            markiere_gelesen(cid, id, ungelesene);
+                        }
                         live_abfrage(lauf, generation, cid, letzte_id, None, String::new(), signale);
                     }
                     Err(e) => {
@@ -638,6 +717,12 @@ pub fn ChatSection() -> impl IntoView {
                                                             <div class="text-base md:text-sm font-semibold truncate">{g.name}</div>
                                                             <div class="text-xs opacity-60 truncate">{member_names}</div>
                                                         </div>
+                                                        {move || {
+                                                            let n = ungelesen_in_chat(ungelesene, gid);
+                                                            (n > 0).then(|| view! {
+                                                                <span class="badge badge-error badge-sm text-white">{n}</span>
+                                                            })
+                                                        }}
                                                         <span class="badge badge-ghost badge-sm">
                                                             {format!("{}", g.teilnehmer.len())}
                                                         </span>
@@ -666,11 +751,31 @@ pub fn ChatSection() -> impl IntoView {
                                 {move || uebersicht_resource.get().map(|res| match res {
                                     Ok(ueb) => {
                                         let my_id = ueb.aktueller_benutzer_id;
+                                        // Direktchats: Gesprächspartner -> Chat-Id (für die Zähler in der Liste).
+                                        // Beim Notizen-Chat (nur ich) ist der Partner ich selbst.
+                                        let direkt_chats: Vec<(Uuid, Uuid)> = ueb
+                                            .chats
+                                            .iter()
+                                            .filter(|c| !c.ist_gruppe)
+                                            .map(|c| {
+                                                let partner = c
+                                                    .teilnehmer
+                                                    .iter()
+                                                    .map(|t| t.id)
+                                                    .find(|id| *id != my_id)
+                                                    .unwrap_or(my_id);
+                                                (partner, c.id)
+                                            })
+                                            .collect();
                                         ueb.alle_teilnehmer.into_iter().map(|teilnehmer| {
                                             let tid = teilnehmer.id;
                                             let tname = teilnehmer.benutzername.clone();
                                             let initial = initiale(&tname);
                                             let is_self = tid == my_id;
+                                            let direkt_chat_id = direkt_chats
+                                                .iter()
+                                                .find(|(partner, _)| *partner == tid)
+                                                .map(|(_, chat_id)| *chat_id);
 
                                             let is_direct_partner = move || {
                                                 active_chat
@@ -711,6 +816,12 @@ pub fn ChatSection() -> impl IntoView {
                                                                 {if is_self { "Du · Notizen" } else { "Direktchat" }}
                                                             </div>
                                                         </div>
+                                                        {move || direkt_chat_id.and_then(|cid| {
+                                                            let n = ungelesen_in_chat(ungelesene, cid);
+                                                            (n > 0).then(|| view! {
+                                                                <span class="badge badge-error badge-sm text-white">{n}</span>
+                                                            })
+                                                        })}
                                                         {move || if wird_geoeffnet() {
                                                             view! { <span class="loading loading-spinner loading-sm text-[#66023C]"></span> }.into_any()
                                                         } else {
