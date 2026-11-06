@@ -4,7 +4,8 @@ use leptos::prelude::*;
 use crate::components::modal::Modal;
 use crate::backend::budget::{
     add_fixkosten, delete_fixkosten, get_fixkosten, kuendigungsfrist_text,
-    update_fixkosten_status, FixkostenEintrag, FixkostenStatus, Zahlungsperiode,
+    update_fixkosten, update_fixkosten_status, FixkostenEintrag, FixkostenStatus,
+    Zahlungsperiode,
 };
 
 /// Auswahlmöglichkeiten für die Kündigungsfrist (in Monaten)
@@ -18,19 +19,25 @@ fn status_select_class(status: FixkostenStatus) -> &'static str {
     }
 }
 
+/// Heutiges Datum im Format JJJJ-MM-TT (für das Datumsfeld).
+fn heute_iso() -> String {
+    Local::now().date_naive().format("%Y-%m-%d").to_string()
+}
+
 #[component]
 pub fn FixkostenSection() -> impl IntoView {
     let today = Local::now().date_naive();
-    let today_iso = today.format("%Y-%m-%d").to_string();
 
     let (buchungstext, set_buchungstext) = signal(String::new());
     let (betrag_input, set_betrag_input) = signal(String::new());
-    let (beginndatum, set_beginndatum) = signal(today_iso.clone());
+    let (beginndatum, set_beginndatum) = signal(heute_iso());
     let (kuendigungsfrist, set_kuendigungsfrist) = signal(0_i32);
     let (zahlungsperiode, set_zahlungsperiode) = signal(Zahlungsperiode::Monatlich);
     let (status, set_status) = signal(FixkostenStatus::Aktiv);
     let (error_msg, set_error_msg) = signal(Option::<String>::None);
     let (modal_offen, set_modal_offen) = signal(false);
+    // Id des Vertrags, der gerade bearbeitet wird (None = neuer Vertrag)
+    let (bearbeiten_id, set_bearbeiten_id) = signal(Option::<uuid::Uuid>::None);
 
     let fixkosten_resource = Resource::new(|| (), |_| get_fixkosten());
 
@@ -49,6 +56,31 @@ pub fn FixkostenSection() -> impl IntoView {
         },
     );
 
+    let update_action = Action::new(
+        move |(id, text, betrag, beginn, frist, periode, status): &(
+            uuid::Uuid,
+            String,
+            f64,
+            String,
+            i32,
+            Zahlungsperiode,
+            FixkostenStatus,
+        )| {
+            let (id, text, betrag, beginn, frist, periode, status) = (
+                *id,
+                text.clone(),
+                *betrag,
+                beginn.clone(),
+                *frist,
+                *periode,
+                *status,
+            );
+            async move {
+                update_fixkosten(id, text, betrag, beginn, frist, periode, status).await
+            }
+        },
+    );
+
     let status_action = Action::new(move |(id, status): &(uuid::Uuid, FixkostenStatus)| {
         let (id, status) = (*id, *status);
         async move { update_fixkosten_status(id, status).await }
@@ -59,14 +91,32 @@ pub fn FixkostenSection() -> impl IntoView {
         async move { delete_fixkosten(id).await }
     });
 
+    // Formular leeren und schliessen (nach Erfolg)
+    let formular_schliessen = move || {
+        set_buchungstext.set(String::new());
+        set_betrag_input.set(String::new());
+        set_error_msg.set(None);
+        set_bearbeiten_id.set(None);
+        set_modal_offen.set(false);
+    };
+
     Effect::new(move |_| {
         if let Some(res) = create_action.value().get() {
             match res {
                 Ok(_) => {
-                    set_buchungstext.set(String::new());
-                    set_betrag_input.set(String::new());
-                    set_error_msg.set(None);
-                    set_modal_offen.set(false);
+                    formular_schliessen();
+                    fixkosten_resource.refetch();
+                }
+                Err(e) => set_error_msg.set(Some(e.to_string())),
+            }
+        }
+    });
+
+    Effect::new(move |_| {
+        if let Some(res) = update_action.value().get() {
+            match res {
+                Ok(()) => {
+                    formular_schliessen();
                     fixkosten_resource.refetch();
                 }
                 Err(e) => set_error_msg.set(Some(e.to_string())),
@@ -96,14 +146,29 @@ pub fn FixkostenSection() -> impl IntoView {
         match raw_amount.trim().parse::<f64>() {
             Ok(val) if val > 0.0 => {
                 set_error_msg.set(None);
-                create_action.dispatch((
-                    text,
-                    val,
-                    beginndatum.get(),
-                    kuendigungsfrist.get(),
-                    zahlungsperiode.get(),
-                    status.get(),
-                ));
+                match bearbeiten_id.get() {
+                    Some(id) => {
+                        update_action.dispatch((
+                            id,
+                            text,
+                            val,
+                            beginndatum.get(),
+                            kuendigungsfrist.get(),
+                            zahlungsperiode.get(),
+                            status.get(),
+                        ));
+                    }
+                    None => {
+                        create_action.dispatch((
+                            text,
+                            val,
+                            beginndatum.get(),
+                            kuendigungsfrist.get(),
+                            zahlungsperiode.get(),
+                            status.get(),
+                        ));
+                    }
+                }
             }
             _ => {
                 set_error_msg.set(Some(
@@ -128,7 +193,14 @@ pub fn FixkostenSection() -> impl IntoView {
                         type="button"
                         class="btn btn-secondary btn-sm self-start sm:self-auto"
                         on:click=move |_| {
+                            set_bearbeiten_id.set(None);
                             set_error_msg.set(None);
+                            set_buchungstext.set(String::new());
+                            set_betrag_input.set(String::new());
+                            set_beginndatum.set(heute_iso());
+                            set_kuendigungsfrist.set(0);
+                            set_zahlungsperiode.set(Zahlungsperiode::Monatlich);
+                            set_status.set(FixkostenStatus::Aktiv);
                             set_modal_offen.set(true);
                         }
                     >
@@ -136,8 +208,12 @@ pub fn FixkostenSection() -> impl IntoView {
                     </button>
                 </div>
 
-                // Modalfenster zum Erfassen neuer Fixkosten
-                <Modal offen=modal_offen on_close=Callback::new(move |_| set_modal_offen.set(false)) titel="Neue Fixkosten">
+                // Modalfenster zum Erfassen und Bearbeiten von Fixkosten
+                <Modal
+                    offen=modal_offen
+                    on_close=Callback::new(move |_| set_modal_offen.set(false))
+                    titel=move || if bearbeiten_id.get().is_some() { "Fixkosten bearbeiten".to_string() } else { "Neue Fixkosten".to_string() }
+                >
                     <form on:submit=on_submit class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div class="sm:col-span-2">
                             <label class="label py-1">
@@ -236,9 +312,9 @@ pub fn FixkostenSection() -> impl IntoView {
                             <button
                                 type="submit"
                                 class="btn btn-secondary"
-                                disabled=move || create_action.pending().get()
+                                disabled=move || create_action.pending().get() || update_action.pending().get()
                             >
-                                "Hinzufügen"
+                                {move || if bearbeiten_id.get().is_some() { "Speichern" } else { "Hinzufügen" }}
                             </button>
                         </div>
                     </form>
@@ -278,7 +354,7 @@ pub fn FixkostenSection() -> impl IntoView {
                                                     <th>"Kündigungsfrist"</th>
                                                     <th>"Status"</th>
                                                     <th class="text-right">"Betrag (CHF)"</th>
-                                                    <th class="w-12 text-right"></th>
+                                                    <th class="w-20 text-right"></th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -301,6 +377,7 @@ pub fn FixkostenSection() -> impl IntoView {
                                                         } else {
                                                             ""
                                                         };
+                                                        let bearbeiten = f.clone();
                                                         view! {
                                                             <tr class=zeilen_class>
                                                                 <td class="font-medium">{f.buchungstext}</td>
@@ -336,7 +413,26 @@ pub fn FixkostenSection() -> impl IntoView {
                                                                         </div>
                                                                     })}
                                                                 </td>
-                                                                <td class="text-right">
+                                                                <td class="text-right whitespace-nowrap">
+                                                                    <button
+                                                                        type="button"
+                                                                        class="btn btn-ghost btn-xs"
+                                                                        title="Fixkosten bearbeiten"
+                                                                        aria-label="Fixkosten bearbeiten"
+                                                                        on:click=move |_| {
+                                                                            set_error_msg.set(None);
+                                                                            set_bearbeiten_id.set(Some(id));
+                                                                            set_buchungstext.set(bearbeiten.buchungstext.clone());
+                                                                            set_betrag_input.set(format!("{:.2}", bearbeiten.betrag));
+                                                                            set_beginndatum.set(bearbeiten.beginndatum.format("%Y-%m-%d").to_string());
+                                                                            set_kuendigungsfrist.set(bearbeiten.kuendigungsfrist_monate);
+                                                                            set_zahlungsperiode.set(bearbeiten.zahlungsperiode);
+                                                                            set_status.set(bearbeiten.status);
+                                                                            set_modal_offen.set(true);
+                                                                        }
+                                                                    >
+                                                                        "✎"
+                                                                    </button>
                                                                     <button
                                                                         type="button"
                                                                         class="btn btn-ghost btn-xs text-error"

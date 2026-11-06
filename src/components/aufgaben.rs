@@ -3,16 +3,22 @@ use leptos::prelude::*;
 
 use crate::components::modal::Modal;
 use crate::backend::aufgaben::{
-    add_aufgabe, delete_aufgabe, get_aufgaben, toggle_aufgabe_erledigt,
+    add_aufgabe, delete_aufgabe, get_aufgaben, toggle_aufgabe_erledigt, update_aufgabe,
 };
+
+/// Heutiges Datum im Format JJJJ-MM-TT (für das Datumsfeld).
+fn heute_iso() -> String {
+    Local::now().date_naive().format("%Y-%m-%d").to_string()
+}
 
 #[component]
 pub fn AufgabenSection() -> impl IntoView {
-    let today_iso = Local::now().date_naive().format("%Y-%m-%d").to_string();
-    let (datum_input, set_datum_input) = signal(today_iso);
+    let (datum_input, set_datum_input) = signal(heute_iso());
     let (beschreibung, set_beschreibung) = signal(String::new());
     let (error_msg, set_error_msg) = signal(Option::<String>::None);
     let (modal_offen, set_modal_offen) = signal(false);
+    // Id der Aufgabe, die gerade bearbeitet wird (None = neue Aufgabe)
+    let (bearbeiten_id, set_bearbeiten_id) = signal(Option::<uuid::Uuid>::None);
 
     let aufgaben_resource = Resource::new(|| (), |_| get_aufgaben());
 
@@ -20,6 +26,11 @@ pub fn AufgabenSection() -> impl IntoView {
         let beschr = beschr.clone();
         let datum = Some(datum.clone());
         async move { add_aufgabe(beschr, datum).await }
+    });
+
+    let update_action = Action::new(move |(id, beschr, datum): &(uuid::Uuid, String, String)| {
+        let (id, beschr, datum) = (*id, beschr.clone(), datum.clone());
+        async move { update_aufgabe(id, beschr, datum).await }
     });
 
     let toggle_action = Action::new(move |(id, erledigt): &(uuid::Uuid, bool)| {
@@ -33,13 +44,31 @@ pub fn AufgabenSection() -> impl IntoView {
         async move { delete_aufgabe(id).await }
     });
 
+    // Formular leeren und schliessen (nach Erfolg)
+    let formular_schliessen = move || {
+        set_beschreibung.set(String::new());
+        set_error_msg.set(None);
+        set_bearbeiten_id.set(None);
+        set_modal_offen.set(false);
+    };
+
     Effect::new(move |_| {
         if let Some(res) = create_action.value().get() {
             match res {
                 Ok(_) => {
-                    set_beschreibung.set(String::new());
-                    set_error_msg.set(None);
-                    set_modal_offen.set(false);
+                    formular_schliessen();
+                    aufgaben_resource.refetch();
+                }
+                Err(e) => set_error_msg.set(Some(e.to_string())),
+            }
+        }
+    });
+
+    Effect::new(move |_| {
+        if let Some(res) = update_action.value().get() {
+            match res {
+                Ok(()) => {
+                    formular_schliessen();
                     aufgaben_resource.refetch();
                 }
                 Err(e) => set_error_msg.set(Some(e.to_string())),
@@ -67,7 +96,14 @@ pub fn AufgabenSection() -> impl IntoView {
             return;
         }
         set_error_msg.set(None);
-        create_action.dispatch((text, datum_input.get()));
+        match bearbeiten_id.get() {
+            Some(id) => {
+                update_action.dispatch((id, text, datum_input.get()));
+            }
+            None => {
+                create_action.dispatch((text, datum_input.get()));
+            }
+        }
     };
 
     view! {
@@ -84,7 +120,10 @@ pub fn AufgabenSection() -> impl IntoView {
                         type="button"
                         class="btn btn-primary btn-sm self-start sm:self-auto"
                         on:click=move |_| {
+                            set_bearbeiten_id.set(None);
                             set_error_msg.set(None);
+                            set_beschreibung.set(String::new());
+                            set_datum_input.set(heute_iso());
                             set_modal_offen.set(true);
                         }
                     >
@@ -92,8 +131,12 @@ pub fn AufgabenSection() -> impl IntoView {
                     </button>
                 </div>
 
-                // Modalfenster zum Erfassen neuer Aufgaben (Standardwert erledigt = false)
-                <Modal offen=modal_offen on_close=Callback::new(move |_| set_modal_offen.set(false)) titel="Neue Aufgabe">
+                // Modalfenster zum Erfassen und Bearbeiten von Aufgaben
+                <Modal
+                    offen=modal_offen
+                    on_close=Callback::new(move |_| set_modal_offen.set(false))
+                    titel=move || if bearbeiten_id.get().is_some() { "Aufgabe bearbeiten".to_string() } else { "Neue Aufgabe".to_string() }
+                >
                     <form on:submit=on_submit class="grid grid-cols-1 gap-3">
                         <div>
                             <label class="label py-1">
@@ -135,9 +178,9 @@ pub fn AufgabenSection() -> impl IntoView {
                             <button
                                 type="submit"
                                 class="btn btn-primary"
-                                disabled=move || create_action.pending().get()
+                                disabled=move || create_action.pending().get() || update_action.pending().get()
                             >
-                                "Hinzufügen"
+                                {move || if bearbeiten_id.get().is_some() { "Speichern" } else { "Hinzufügen" }}
                             </button>
                         </div>
                     </form>
@@ -164,7 +207,7 @@ pub fn AufgabenSection() -> impl IntoView {
                                                     <th class="w-32">"Datum"</th>
                                                     <th>"Beschreibung"</th>
                                                     <th class="w-40">"Benutzer"</th>
-                                                    <th class="w-12 text-right"></th>
+                                                    <th class="w-20 text-right"></th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -181,6 +224,7 @@ pub fn AufgabenSection() -> impl IntoView {
                                                         let datum_str = a.datum.format("%d.%m.%Y").to_string();
                                                         let id = a.id;
                                                         let is_erledigt = a.erledigt;
+                                                        let bearbeiten = a.clone();
 
                                                         let datum_class = if is_erledigt {
                                                             "whitespace-nowrap font-mono text-xs sm:text-sm line-through text-base-content/40"
@@ -214,7 +258,22 @@ pub fn AufgabenSection() -> impl IntoView {
                                                                         {a.benutzer}
                                                                     </span>
                                                                 </td>
-                                                                <td class="text-right">
+                                                                <td class="text-right whitespace-nowrap">
+                                                                    <button
+                                                                        type="button"
+                                                                        class="btn btn-ghost btn-xs"
+                                                                        title="Aufgabe bearbeiten"
+                                                                        aria-label="Aufgabe bearbeiten"
+                                                                        on:click=move |_| {
+                                                                            set_error_msg.set(None);
+                                                                            set_bearbeiten_id.set(Some(id));
+                                                                            set_beschreibung.set(bearbeiten.beschreibung.clone());
+                                                                            set_datum_input.set(bearbeiten.datum.format("%Y-%m-%d").to_string());
+                                                                            set_modal_offen.set(true);
+                                                                        }
+                                                                    >
+                                                                        "✎"
+                                                                    </button>
                                                                     <button
                                                                         type="button"
                                                                         class="btn btn-ghost btn-xs text-error"

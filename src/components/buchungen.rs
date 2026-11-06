@@ -2,18 +2,26 @@ use chrono::Local;
 use leptos::prelude::*;
 
 use crate::components::modal::Modal;
-use crate::backend::budget::{add_buchung, delete_buchung, get_buchungen, BuchungsArt};
+use crate::backend::budget::{
+    add_buchung, delete_buchung, get_buchungen, update_buchung, BuchungsArt,
+};
+
+/// Heutiges Datum im Format JJJJ-MM-TT (für das Datumsfeld).
+fn heute_iso() -> String {
+    Local::now().date_naive().format("%Y-%m-%d").to_string()
+}
 
 #[component]
 pub fn BuchungenSection() -> impl IntoView {
-    let today_iso = Local::now().date_naive().format("%Y-%m-%d").to_string();
-    let (datum_input, set_datum_input) = signal(today_iso);
+    let (datum_input, set_datum_input) = signal(heute_iso());
     let (buchungstext, set_buchungstext) = signal(String::new());
     let (betrag_input, set_betrag_input) = signal(String::new());
     let (art, set_art) = signal(BuchungsArt::Eingang);
     let (filter_art, set_filter_art) = signal(Option::<BuchungsArt>::None);
     let (error_msg, set_error_msg) = signal(Option::<String>::None);
     let (modal_offen, set_modal_offen) = signal(false);
+    // Id der Buchung, die gerade bearbeitet wird (None = neue Buchung)
+    let (bearbeiten_id, set_bearbeiten_id) = signal(Option::<uuid::Uuid>::None);
 
     let buchungen_resource = Resource::new(|| (), |_| get_buchungen());
 
@@ -27,19 +35,51 @@ pub fn BuchungenSection() -> impl IntoView {
         },
     );
 
+    let update_action = Action::new(
+        move |(id, text, betrag, buchungs_art, datum): &(
+            uuid::Uuid,
+            String,
+            f64,
+            BuchungsArt,
+            String,
+        )| {
+            let (id, text, betrag, buchungs_art, datum) =
+                (*id, text.clone(), *betrag, *buchungs_art, datum.clone());
+            async move { update_buchung(id, text, betrag, buchungs_art, datum).await }
+        },
+    );
+
     let delete_action = Action::new(move |id: &uuid::Uuid| {
         let id = *id;
         async move { delete_buchung(id).await }
     });
 
+    // Formular leeren und schliessen (nach Erfolg)
+    let formular_schliessen = move || {
+        set_buchungstext.set(String::new());
+        set_betrag_input.set(String::new());
+        set_error_msg.set(None);
+        set_bearbeiten_id.set(None);
+        set_modal_offen.set(false);
+    };
+
     Effect::new(move |_| {
         if let Some(res) = create_action.value().get() {
             match res {
                 Ok(_) => {
-                    set_buchungstext.set(String::new());
-                    set_betrag_input.set(String::new());
-                    set_error_msg.set(None);
-                    set_modal_offen.set(false);
+                    formular_schliessen();
+                    buchungen_resource.refetch();
+                }
+                Err(e) => set_error_msg.set(Some(e.to_string())),
+            }
+        }
+    });
+
+    Effect::new(move |_| {
+        if let Some(res) = update_action.value().get() {
+            match res {
+                Ok(()) => {
+                    formular_schliessen();
                     buchungen_resource.refetch();
                 }
                 Err(e) => set_error_msg.set(Some(e.to_string())),
@@ -60,7 +100,14 @@ pub fn BuchungenSection() -> impl IntoView {
         match raw_amount.trim().parse::<f64>() {
             Ok(val) if val > 0.0 => {
                 set_error_msg.set(None);
-                create_action.dispatch((text, val, art.get(), datum_input.get()));
+                match bearbeiten_id.get() {
+                    Some(id) => {
+                        update_action.dispatch((id, text, val, art.get(), datum_input.get()));
+                    }
+                    None => {
+                        create_action.dispatch((text, val, art.get(), datum_input.get()));
+                    }
+                }
             }
             _ => {
                 set_error_msg.set(Some(
@@ -87,7 +134,12 @@ pub fn BuchungenSection() -> impl IntoView {
                         type="button"
                         class="btn btn-primary btn-sm"
                         on:click=move |_| {
+                            set_bearbeiten_id.set(None);
                             set_error_msg.set(None);
+                            set_buchungstext.set(String::new());
+                            set_betrag_input.set(String::new());
+                            set_art.set(BuchungsArt::Eingang);
+                            set_datum_input.set(heute_iso());
                             set_modal_offen.set(true);
                         }
                     >
@@ -121,8 +173,12 @@ pub fn BuchungenSection() -> impl IntoView {
                     </div>
                 </div>
 
-                // Modalfenster zum Erfassen neuer Buchungen (inkl. Datum, Buchungstext, Betrag)
-                <Modal offen=modal_offen on_close=Callback::new(move |_| set_modal_offen.set(false)) titel="Neue Buchung">
+                // Modalfenster zum Erfassen und Bearbeiten von Buchungen (inkl. Datum, Buchungstext, Betrag)
+                <Modal
+                    offen=modal_offen
+                    on_close=Callback::new(move |_| set_modal_offen.set(false))
+                    titel=move || if bearbeiten_id.get().is_some() { "Buchung bearbeiten".to_string() } else { "Neue Buchung".to_string() }
+                >
                     <form on:submit=on_submit class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div class="sm:col-span-2">
                             <label class="label py-1">
@@ -201,9 +257,9 @@ pub fn BuchungenSection() -> impl IntoView {
                             <button
                                 type="submit"
                                 class="btn btn-primary"
-                                disabled=move || create_action.pending().get()
+                                disabled=move || create_action.pending().get() || update_action.pending().get()
                             >
-                                "Verbuchen"
+                                {move || if bearbeiten_id.get().is_some() { "Speichern" } else { "Verbuchen" }}
                             </button>
                         </div>
                     </form>
@@ -252,7 +308,7 @@ pub fn BuchungenSection() -> impl IntoView {
                                                     <th>"Buchungstext"</th>
                                                     <th class="w-40">"Benutzer"</th>
                                                     <th class="text-right">"Betrag (CHF)"</th>
-                                                    <th class="w-12 text-right"></th>
+                                                    <th class="w-20 text-right"></th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -284,6 +340,7 @@ pub fn BuchungenSection() -> impl IntoView {
                                                             format!("- CHF {:.2}", b.betrag)
                                                         };
                                                         let datum_str = b.erstellt_am.format("%d.%m.%Y").to_string();
+                                                        let bearbeiten = b.clone();
                                                         let benutzer_name = b.benutzer;
                                                         let id = b.id;
 
@@ -304,7 +361,24 @@ pub fn BuchungenSection() -> impl IntoView {
                                                                     </span>
                                                                 </td>
                                                                 <td class=amount_class>{formatted_amount}</td>
-                                                                <td class="text-right">
+                                                                <td class="text-right whitespace-nowrap">
+                                                                    <button
+                                                                        type="button"
+                                                                        class="btn btn-ghost btn-xs"
+                                                                        title="Buchung bearbeiten"
+                                                                        aria-label="Buchung bearbeiten"
+                                                                        on:click=move |_| {
+                                                                            set_error_msg.set(None);
+                                                                            set_bearbeiten_id.set(Some(id));
+                                                                            set_buchungstext.set(bearbeiten.buchungstext.clone());
+                                                                            set_betrag_input.set(format!("{:.2}", bearbeiten.betrag));
+                                                                            set_art.set(bearbeiten.art);
+                                                                            set_datum_input.set(bearbeiten.erstellt_am.format("%Y-%m-%d").to_string());
+                                                                            set_modal_offen.set(true);
+                                                                        }
+                                                                    >
+                                                                        "✎"
+                                                                    </button>
                                                                     <button
                                                                         type="button"
                                                                         class="btn btn-ghost btn-xs text-error"
