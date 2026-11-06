@@ -36,7 +36,7 @@ pub fn Sideboard(
                     <span class="font-bold text-lg text-[#66023C]">"Regelha"</span>
                     <label
                         for="app-sideboard-drawer"
-                        class="btn btn-sm btn-circle btn-ghost"
+                        class="btn btn-circle btn-ghost"
                         aria-label="Menü schließen"
                     >
                         "✕"

@@ -38,7 +38,7 @@ pub fn Modal(
                         <h3 class="font-bold text-lg text-[#66023C]">{move || titel.get()}</h3>
                         <button
                             type="button"
-                            class="btn btn-sm btn-circle btn-ghost"
+                            class="btn btn-circle btn-ghost"
                             aria-label="Fenster schliessen"
                             on:click=move |_| on_close.run(())
                         >
