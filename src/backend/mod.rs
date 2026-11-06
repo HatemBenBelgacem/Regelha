@@ -4,6 +4,7 @@ pub mod budget;
 pub mod chat;
 #[cfg(feature = "ssr")]
 pub mod db;
+pub mod push;
 
 #[cfg(feature = "ssr")]
 pub fn register_server_functions() {
@@ -45,4 +46,8 @@ pub fn register_server_functions() {
     register_explicit::<chat::SetChatTippstatus>();
     register_explicit::<chat::GetUngeleseneChats>();
     register_explicit::<chat::MarkiereChatGelesen>();
+
+    // Push-Benachrichtigungen
+    register_explicit::<push::GetPushPublicKey>();
+    register_explicit::<push::SpeicherePushAbo>();
 }

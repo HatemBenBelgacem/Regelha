@@ -54,7 +54,7 @@ pub struct UngeleseneChat {
 }
 
 #[cfg(feature = "ssr")]
-mod store {
+pub(crate) mod store {
     use super::*;
     use std::sync::{LazyLock, Mutex};
 
@@ -1084,6 +1084,13 @@ pub async fn send_chat_nachricht(
             .await
             .map_err(|e| ServerFnError::new(format!("DB-Insert (nachricht) fehlgeschlagen: {e}")))?;
 
+            crate::backend::push::benachrichtige_nach_nachricht(
+                Some(pool.clone()),
+                chat_id,
+                current_user.id,
+                current_user.benutzername.clone(),
+                crate::backend::push::kurz_vorschau(&trimmed, has_attachment),
+            );
             live::nachricht_gesendet(chat_id, current_user.id);
 
             return Ok(ChatNachricht {
@@ -1100,6 +1107,13 @@ pub async fn send_chat_nachricht(
         }
 
         // In-Memory-Fallback
+        crate::backend::push::benachrichtige_nach_nachricht(
+            None,
+            chat_id,
+            current_user.id,
+            current_user.benutzername.clone(),
+            crate::backend::push::kurz_vorschau(&trimmed, has_attachment),
+        );
         let msg = ChatNachricht {
             id: nachricht_id,
             chat_id,
