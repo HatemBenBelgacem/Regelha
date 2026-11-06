@@ -42,6 +42,11 @@ sqlx = { version = "0.8", default-features = false, features = [
 ], optional = true }
 dotenvy = { version = "0.15", optional = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter"], optional = true }
+argon2 = { version = "0.5", features = ["std"], optional = true }
+password-hash = { version = "0.5", features = ["getrandom"], optional = true }
+hmac = { version = "0.12", optional = true }
+sha2 = { version = "0.10", optional = true }
+subtle = { version = "2.6", optional = true }
 
 [features]
 hydrate = [
@@ -58,10 +63,22 @@ ssr = [
     "dep:sqlx",
     "dep:dotenvy",
     "dep:tracing-subscriber",
+    "dep:argon2",
+    "dep:password-hash",
+    "dep:hmac",
+    "dep:sha2",
+    "dep:subtle",
     "leptos/ssr",
     "leptos_meta/ssr",
     "leptos_router/ssr",
 ]
+
+# argon2 ist unoptimiert sehr langsam – auch im Dev-Build optimiert kompilieren
+[profile.dev.package.argon2]
+opt-level = 3
+
+[profile.dev.package.blake2]
+opt-level = 3
 
 # Optimiert das WASM-Bundle für Release-Builds
 [profile.wasm-release]

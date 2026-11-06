@@ -45,7 +45,12 @@ mod store {
     });
 }
 
-#[server(GetAufgaben, "/api", endpoint = "get_aufgaben")]
+#[server(
+    GetAufgaben,
+    "/api",
+    input = leptos::server_fn::codec::Json,
+    endpoint = "get_aufgaben"
+)]
 pub async fn get_aufgaben() -> Result<Vec<Aufgabe>, ServerFnError> {
     #[cfg(feature = "ssr")]
     {
@@ -101,7 +106,12 @@ pub async fn get_aufgaben() -> Result<Vec<Aufgabe>, ServerFnError> {
     }
 }
 
-#[server(AddAufgabe, "/api", endpoint = "add_aufgabe")]
+#[server(
+    AddAufgabe,
+    "/api",
+    input = leptos::server_fn::codec::Json,
+    endpoint = "add_aufgabe"
+)]
 pub async fn add_aufgabe(
     beschreibung: String,
     datum: Option<String>,
@@ -166,7 +176,12 @@ pub async fn add_aufgabe(
     unreachable!()
 }
 
-#[server(ToggleAufgabeErledigt, "/api", endpoint = "toggle_aufgabe_erledigt")]
+#[server(
+    ToggleAufgabeErledigt,
+    "/api",
+    input = leptos::server_fn::codec::Json,
+    endpoint = "toggle_aufgabe_erledigt"
+)]
 pub async fn toggle_aufgabe_erledigt(id: Uuid, erledigt: bool) -> Result<(), ServerFnError> {
     #[cfg(feature = "ssr")]
     {
@@ -200,7 +215,12 @@ pub async fn toggle_aufgabe_erledigt(id: Uuid, erledigt: bool) -> Result<(), Ser
     Ok(())
 }
 
-#[server(DeleteAufgabe, "/api", endpoint = "delete_aufgabe")]
+#[server(
+    DeleteAufgabe,
+    "/api",
+    input = leptos::server_fn::codec::Json,
+    endpoint = "delete_aufgabe"
+)]
 pub async fn delete_aufgabe(id: Uuid) -> Result<(), ServerFnError> {
     #[cfg(feature = "ssr")]
     {

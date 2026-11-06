@@ -29,6 +29,11 @@ async fn main() {
         )
         .init();
 
+    if let Err(err) = regelha::backend::auth::init_session_secret() {
+        eprintln!("Fehler: {err}");
+        std::process::exit(1);
+    }
+
     register_server_functions();
     let db_pool = init_db_pool().await;
 
