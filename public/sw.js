@@ -56,3 +56,43 @@ self.addEventListener('fetch', (event) => {
 
   // Alles andere (App-Code, WASM, CSS) geht direkt ans Netz und wird nicht gespeichert.
 });
+
+// Push-Benachrichtigung anzeigen. Chrome verlangt bei jeder Push-Nachricht eine sichtbare Benachrichtigung,
+// deshalb wird immer eine gezeigt.
+self.addEventListener('push', (event) => {
+  let daten = {};
+  try {
+    daten = event.data ? event.data.json() : {};
+  } catch (e) {
+    daten = { title: 'Regelha', body: event.data ? event.data.text() : '' };
+  }
+  event.waitUntil(
+    self.registration.showNotification(daten.title || 'Regelha', {
+      body: daten.body || '',
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      tag: daten.tag || 'regelha',
+      renotify: true,
+      data: { url: daten.url || '/chat' },
+    })
+  );
+});
+
+// Klick auf die Benachrichtigung: App öffnen oder das offene Fenster nach vorn holen
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const ziel = (event.notification.data && event.notification.data.url) || '/chat';
+  event.waitUntil(
+    (async () => {
+      const fenster = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+      if (fenster.length > 0) {
+        const erstes = fenster[0];
+        if ('navigate' in erstes && !erstes.url.endsWith(ziel)) {
+          await erstes.navigate(ziel).catch(() => {});
+        }
+        return erstes.focus();
+      }
+      return clients.openWindow(ziel);
+    })()
+  );
+});

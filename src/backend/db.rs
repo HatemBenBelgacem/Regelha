@@ -294,5 +294,20 @@ async fn run_schema_init(pool: &PgPool) -> Result<(), sqlx::Error> {
     .execute(pool)
     .await?;
 
+    // 9. Tabelle `push_abo` (Geräte für Push-Benachrichtigungen, je ein Eintrag pro Browser-Abo)
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS push_abo (
+            endpoint TEXT PRIMARY KEY,
+            benutzer_id UUID NOT NULL REFERENCES benutzer(id) ON DELETE CASCADE,
+            p256dh TEXT NOT NULL,
+            auth TEXT NOT NULL,
+            erstellt_am TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
     Ok(())
 }

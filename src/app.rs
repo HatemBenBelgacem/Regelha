@@ -32,6 +32,7 @@ pub fn shell(options: LeptosOptions) -> impl IntoView {
                 <HydrationScripts options/>
                 <MetaTags/>
                 <script inner_html=SW_REGISTRIERUNG></script>
+                <script src="/push.js"></script>
             </head>
             <body class="min-h-screen bg-[#F8FAFC] text-base-content">
                 <App/>

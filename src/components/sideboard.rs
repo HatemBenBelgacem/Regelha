@@ -2,6 +2,7 @@ use leptos::prelude::*;
 use leptos_router::hooks::use_url;
 
 use crate::components::chat::{ungelesen_gesamt, Ungelesene};
+use crate::components::push::PushBenachrichtigungen;
 
 #[component]
 pub fn Sideboard(
@@ -118,9 +119,12 @@ pub fn Sideboard(
                 </ul>
             </div>
 
-            <div class="p-3 rounded-box bg-[#F8FAFC] border border-slate-200/80 text-xs text-slate-600 space-y-1">
+            <div class="space-y-3">
+                <PushBenachrichtigungen/>
+                <div class="p-3 rounded-box bg-[#F8FAFC] border border-slate-200/80 text-xs text-slate-600 space-y-1">
                 <div class="font-semibold text-[#66023C]">"Regelha"</div>
                 <p>"Übersicht über Tages-, Monats- und prognostizierte Ausgaben."</p>
+                </div>
             </div>
         </aside>
     }

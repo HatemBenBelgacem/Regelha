@@ -24,6 +24,8 @@ tracing = "0.1"
 # Client / Hydration Dependencies (WASM)
 wasm-bindgen = { version = "0.2", optional = true }
 console_error_panic_hook = { version = "0.1", optional = true }
+wasm-bindgen-futures = { version = "0.4", optional = true }
+js-sys = { version = "0.3", optional = true }
 
 # Server / SSR Dependencies (Axum + PostgreSQL)
 leptos_axum = { version = "0.8", optional = true }
@@ -47,12 +49,16 @@ password-hash = { version = "0.5", features = ["getrandom"], optional = true }
 hmac = { version = "0.12", optional = true }
 sha2 = { version = "0.10", optional = true }
 subtle = { version = "2.6", optional = true }
+# Web Push: Nachrichten-Benachrichtigungen an Geräte senden (nur Server)
+web-push = { version = "0.11", optional = true }
 
 [features]
 hydrate = [
     "leptos/hydrate",
     "dep:console_error_panic_hook",
     "dep:wasm-bindgen",
+    "dep:wasm-bindgen-futures",
+    "dep:js-sys",
 ]
 ssr = [
     "dep:axum",
@@ -68,6 +74,7 @@ ssr = [
     "dep:hmac",
     "dep:sha2",
     "dep:subtle",
+    "dep:web-push",
     "leptos/ssr",
     "leptos_meta/ssr",
     "leptos_router/ssr",
