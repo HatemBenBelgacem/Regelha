@@ -27,6 +27,10 @@ pub fn AppLayout() -> impl IntoView {
         logout_action.dispatch(());
     });
 
+    // Zustand des Sideboards auf dem Smartphone (offen/geschlossen)
+    let (drawer_open, set_drawer_open) = signal(false);
+    let close_drawer = Callback::new(move |_: ()| set_drawer_open.set(false));
+
     view! {
         <Suspense fallback=move || view! {
             <div class="min-h-screen flex items-center justify-center bg-[#F8FAFC]">
@@ -50,7 +54,13 @@ pub fn AppLayout() -> impl IntoView {
 
                             // 2. Sideboard + 3. Content (Responsives Drawer-Layout)
                             <div class="drawer lg:drawer-open flex-1">
-                                <input id="app-sideboard-drawer" type="checkbox" class="drawer-toggle" />
+                                <input
+                                    id="app-sideboard-drawer"
+                                    type="checkbox"
+                                    class="drawer-toggle"
+                                    prop:checked=drawer_open
+                                    on:change=move |ev| set_drawer_open.set(event_target_checked(&ev))
+                                />
 
                                 // Content-Bereich (volle verfügbare Breite)
                                 <div class="drawer-content flex flex-col p-2 sm:p-4 lg:p-6 overflow-x-hidden w-full">
@@ -62,7 +72,7 @@ pub fn AppLayout() -> impl IntoView {
                                 // Sideboard (Navigationen)
                                 <div class="drawer-side z-30">
                                     <label for="app-sideboard-drawer" aria-label="Navigation schließen" class="drawer-overlay"></label>
-                                    <Sideboard/>
+                                    <Sideboard on_navigate=close_drawer/>
                                 </div>
                             </div>
                         </div>

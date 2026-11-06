@@ -22,7 +22,9 @@ pub fn register_server_functions() {
     register_explicit::<budget::DeleteBuchung>();
     register_explicit::<budget::GetFixkosten>();
     register_explicit::<budget::AddFixkosten>();
+    register_explicit::<budget::UpdateFixkostenStatus>();
     register_explicit::<budget::DeleteFixkosten>();
+    register_explicit::<budget::GetMonatskosten>();
 
     // Aufgaben Server Functions
     register_explicit::<aufgaben::GetAufgaben>();

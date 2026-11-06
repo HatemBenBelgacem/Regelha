@@ -7,6 +7,7 @@ use std::time::Duration;
 use leptos::{prelude::*, task::spawn_local};
 use uuid::Uuid;
 
+use crate::components::modal::Modal;
 use crate::backend::chat::{
     chat_live_abfrage, create_group_chat, get_chat_nachrichten, get_chat_uebersicht,
     open_direct_chat, send_chat_nachricht, set_chat_tippstatus, ChatNachricht, ChatRaum,
@@ -578,81 +579,12 @@ pub fn ChatSection() -> impl IntoView {
                                 <button
                                     type="button"
                                     class="btn btn-md md:btn-sm min-h-11 md:min-h-0 rounded-full bg-[#66023C] hover:bg-[#7A2048] text-white border-none px-4"
-                                    on:click=move |_| set_show_group_form.update(|v| *v = !*v)
+                                    on:click=move |_| set_show_group_form.set(true)
                                 >
-                                    {move || if show_group_form.get() { "Abbrechen" } else { "+ Gruppe" }}
+                                    "+ Gruppe"
                                 </button>
                             </li>
 
-                            // Formular zum Erstellen eines neuen Gruppenchats
-                            {move || show_group_form.get().then(|| view! {
-                                <li class="px-3 pb-3">
-                                    <form
-                                        on:submit=on_create_group_submit
-                                        class="p-3 rounded-box bg-base-200 space-y-3"
-                                    >
-                                        <label class="block space-y-1">
-                                            <span class="text-xs font-semibold opacity-70">"Gruppenname"</span>
-                                            <input
-                                                type="text"
-                                                placeholder="z.B. Haushalt, Projekt, Familie..."
-                                                class="input input-bordered input-md md:input-sm w-full text-base md:text-sm"
-                                                prop:value=move || group_name.get()
-                                                on:input=move |ev| set_group_name.set(event_target_value(&ev))
-                                                required
-                                            />
-                                        </label>
-
-                                        <div>
-                                            <div class="text-xs font-semibold mb-1 opacity-70">"Teilnehmer auswählen:"</div>
-                                            <div class="max-h-48 md:max-h-32 overflow-y-auto pr-1">
-                                                {move || uebersicht_resource.get().and_then(|r| r.ok()).map(|ueb| {
-                                                    let my_id = ueb.aktueller_benutzer_id;
-                                                    ueb.alle_teilnehmer.into_iter().map(|t| {
-                                                        let uid = t.id;
-                                                        let is_self = uid == my_id;
-                                                        let checked = move || is_self || selected_group_members.get().contains(&uid);
-                                                        view! {
-                                                            <label class="flex items-center gap-3 text-sm md:text-xs cursor-pointer py-2 md:py-1 px-1 rounded-lg hover:bg-base-100">
-                                                                <input
-                                                                    type="checkbox"
-                                                                    class="checkbox checkbox-md md:checkbox-xs checkbox-primary"
-                                                                    prop:checked=checked
-                                                                    disabled=is_self
-                                                                    on:change=move |ev| {
-                                                                        let is_checked = event_target_checked(&ev);
-                                                                        set_selected_group_members.update(|list| {
-                                                                            if is_checked {
-                                                                                if !list.contains(&uid) {
-                                                                                    list.push(uid);
-                                                                                }
-                                                                            } else {
-                                                                                list.retain(|x| *x != uid);
-                                                                            }
-                                                                        });
-                                                                    }
-                                                                />
-                                                                <span class="truncate">
-                                                                    {t.benutzername}
-                                                                    {if is_self { " (Du)" } else { "" }}
-                                                                </span>
-                                                            </label>
-                                                        }
-                                                    }).collect_view()
-                                                })}
-                                            </div>
-                                        </div>
-
-                                        <button
-                                            type="submit"
-                                            class="btn btn-primary btn-md md:btn-sm min-h-11 md:min-h-0 w-full"
-                                            disabled=move || create_group_action.pending().get()
-                                        >
-                                            "Gruppenchat erstellen"
-                                        </button>
-                                    </form>
-                                </li>
-                            })}
 
                             <Suspense fallback=move || view! {
                                 <li class="px-4 py-2 text-xs opacity-60">"Lade Chats..."</li>
@@ -1054,6 +986,83 @@ pub fn ChatSection() -> impl IntoView {
                     </form>
                 </div>
             </div>
+
+            // Modalfenster zum Erstellen eines neuen Gruppenchats
+            <Modal
+                offen=show_group_form
+                on_close=Callback::new(move |_| set_show_group_form.set(false))
+                titel="Neuer Gruppenchat"
+            >
+                        <form
+                            on:submit=on_create_group_submit
+                            class="space-y-4"
+                        >
+                            <label class="block space-y-1">
+                                <span class="text-xs font-semibold opacity-70">"Gruppenname"</span>
+                                <input
+                                    type="text"
+                                    placeholder="z.B. Haushalt, Projekt, Familie..."
+                                    class="input input-bordered input-md md:input-sm w-full text-base md:text-sm"
+                                    prop:value=move || group_name.get()
+                                    on:input=move |ev| set_group_name.set(event_target_value(&ev))
+                                    required
+                                />
+                            </label>
+
+                            <div>
+                                <div class="text-xs font-semibold mb-1 opacity-70">"Teilnehmer auswählen:"</div>
+                                <div class="max-h-48 md:max-h-32 overflow-y-auto pr-1">
+                                    {move || uebersicht_resource.get().and_then(|r| r.ok()).map(|ueb| {
+                                        let my_id = ueb.aktueller_benutzer_id;
+                                        ueb.alle_teilnehmer.into_iter().map(|t| {
+                                            let uid = t.id;
+                                            let is_self = uid == my_id;
+                                            let checked = move || is_self || selected_group_members.get().contains(&uid);
+                                            view! {
+                                                <label class="flex items-center gap-3 text-sm md:text-xs cursor-pointer py-2 md:py-1 px-1 rounded-lg hover:bg-base-100">
+                                                    <input
+                                                        type="checkbox"
+                                                        class="checkbox checkbox-md md:checkbox-xs checkbox-primary"
+                                                        prop:checked=checked
+                                                        disabled=is_self
+                                                        on:change=move |ev| {
+                                                            let is_checked = event_target_checked(&ev);
+                                                            set_selected_group_members.update(|list| {
+                                                                if is_checked {
+                                                                    if !list.contains(&uid) {
+                                                                        list.push(uid);
+                                                                    }
+                                                                } else {
+                                                                    list.retain(|x| *x != uid);
+                                                                }
+                                                            });
+                                                        }
+                                                    />
+                                                    <span class="truncate">
+                                                        {t.benutzername}
+                                                        {if is_self { " (Du)" } else { "" }}
+                                                    </span>
+                                                </label>
+                                            }
+                                        }).collect_view()
+                                    })}
+                                </div>
+                            </div>
+
+                            <div class="modal-action mt-2">
+                                <button type="button" class="btn btn-ghost" on:click=move |_| set_show_group_form.set(false)>
+                                    "Abbrechen"
+                                </button>
+                                <button
+                                    type="submit"
+                                    class="btn btn-primary"
+                                    disabled=move || create_group_action.pending().get()
+                                >
+                                    "Gruppenchat erstellen"
+                                </button>
+                            </div>
+                        </form>
+            </Modal>
         </section>
     }
 }

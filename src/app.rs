@@ -8,6 +8,7 @@ use leptos_router::{
 use crate::components::{
     app_layout::AppLayout, aufgaben::AufgabenSection, buchungen::BuchungenSection,
     chat::ChatSection, dashboard::BudgetDashboard, fixkosten::FixkostenSection,
+    monatskosten::MonatskostenSection,
 };
 
 pub fn shell(options: LeptosOptions) -> impl IntoView {
@@ -42,6 +43,7 @@ pub fn App() -> impl IntoView {
                     <Route path=StaticSegment("") view=BudgetDashboard/>
                     <Route path=StaticSegment("buchungen") view=BuchungenSection/>
                     <Route path=StaticSegment("fixkosten") view=FixkostenSection/>
+                    <Route path=StaticSegment("monatskosten") view=MonatskostenSection/>
                     <Route path=StaticSegment("aufgaben") view=AufgabenSection/>
                     <Route path=StaticSegment("chat") view=ChatSection/>
                 </ParentRoute>

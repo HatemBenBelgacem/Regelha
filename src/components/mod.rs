@@ -6,4 +6,6 @@ pub mod dashboard;
 pub mod fixkosten;
 pub mod header;
 pub mod login;
+pub mod modal;
+pub mod monatskosten;
 pub mod sideboard;

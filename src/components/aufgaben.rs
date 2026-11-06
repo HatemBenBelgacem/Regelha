@@ -1,6 +1,7 @@
 use chrono::Local;
 use leptos::prelude::*;
 
+use crate::components::modal::Modal;
 use crate::backend::aufgaben::{
     add_aufgabe, delete_aufgabe, get_aufgaben, toggle_aufgabe_erledigt,
 };
@@ -11,6 +12,7 @@ pub fn AufgabenSection() -> impl IntoView {
     let (datum_input, set_datum_input) = signal(today_iso);
     let (beschreibung, set_beschreibung) = signal(String::new());
     let (error_msg, set_error_msg) = signal(Option::<String>::None);
+    let (modal_offen, set_modal_offen) = signal(false);
 
     let aufgaben_resource = Resource::new(|| (), |_| get_aufgaben());
 
@@ -37,6 +39,7 @@ pub fn AufgabenSection() -> impl IntoView {
                 Ok(_) => {
                     set_beschreibung.set(String::new());
                     set_error_msg.set(None);
+                    set_modal_offen.set(false);
                     aufgaben_resource.refetch();
                 }
                 Err(e) => set_error_msg.set(Some(e.to_string())),
@@ -70,58 +73,75 @@ pub fn AufgabenSection() -> impl IntoView {
     view! {
         <section class="card bg-base-100 shadow-sm border border-base-300">
             <div class="card-body p-4 sm:p-6 space-y-6">
-                <div>
-                    <h2 class="card-title text-lg sm:text-xl">"Aufgaben"</h2>
-                    <p class="text-xs sm:text-sm text-base-content/70">
-                        "Erfassung und Übersicht deiner persönlichen Aufgaben mit Beschreibung, Datum und Status"
-                    </p>
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                        <h2 class="card-title text-lg sm:text-xl">"Aufgaben"</h2>
+                        <p class="text-xs sm:text-sm text-base-content/70">
+                            "Erfassung und Übersicht deiner persönlichen Aufgaben mit Beschreibung, Datum und Status"
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        class="btn btn-primary btn-sm self-start sm:self-auto"
+                        on:click=move |_| {
+                            set_error_msg.set(None);
+                            set_modal_offen.set(true);
+                        }
+                    >
+                        "+ Neue Aufgabe"
+                    </button>
                 </div>
 
-                // Formular zum Erfassen neuer Aufgaben (Standardwert erledigt = false)
-                <form on:submit=on_submit class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 bg-base-200/60 p-3 sm:p-4 rounded-box items-end">
-                    <div class="sm:col-span-2 lg:col-span-7">
-                        <label class="label py-1">
-                            <span class="label-text font-medium text-xs sm:text-sm">"Beschreibung"</span>
-                        </label>
-                        <input
-                            type="text"
-                            placeholder="z.B. Rechnung überweisen, Steuererklärung vorbereiten..."
-                            class="input input-bordered input-sm w-full"
-                            prop:value=move || beschreibung.get()
-                            on:input=move |ev| set_beschreibung.set(event_target_value(&ev))
-                            required
-                        />
-                    </div>
+                // Modalfenster zum Erfassen neuer Aufgaben (Standardwert erledigt = false)
+                <Modal offen=modal_offen on_close=Callback::new(move |_| set_modal_offen.set(false)) titel="Neue Aufgabe">
+                    <form on:submit=on_submit class="grid grid-cols-1 gap-3">
+                        <div>
+                            <label class="label py-1">
+                                <span class="label-text font-medium text-sm">"Beschreibung"</span>
+                            </label>
+                            <input
+                                type="text"
+                                placeholder="z.B. Rechnung überweisen, Steuererklärung vorbereiten..."
+                                class="input input-bordered w-full"
+                                prop:value=move || beschreibung.get()
+                                on:input=move |ev| set_beschreibung.set(event_target_value(&ev))
+                                required
+                            />
+                        </div>
 
-                    <div class="sm:col-span-1 lg:col-span-3">
-                        <label class="label py-1">
-                            <span class="label-text font-medium text-xs sm:text-sm">"Datum"</span>
-                        </label>
-                        <input
-                            type="date"
-                            class="input input-bordered input-sm w-full"
-                            prop:value=move || datum_input.get()
-                            on:input=move |ev| set_datum_input.set(event_target_value(&ev))
-                            required
-                        />
-                    </div>
+                        <div>
+                            <label class="label py-1">
+                                <span class="label-text font-medium text-sm">"Datum"</span>
+                            </label>
+                            <input
+                                type="date"
+                                class="input input-bordered w-full"
+                                prop:value=move || datum_input.get()
+                                on:input=move |ev| set_datum_input.set(event_target_value(&ev))
+                                required
+                            />
+                        </div>
 
-                    <div class="sm:col-span-1 lg:col-span-2">
-                        <button
-                            type="submit"
-                            class="btn btn-primary btn-sm w-full"
-                            disabled=move || create_action.pending().get()
-                        >
-                            "Hinzufügen"
-                        </button>
-                    </div>
-                </form>
+                        {move || error_msg.get().map(|msg| view! {
+                            <div class="alert alert-warning py-2 text-sm">
+                                <span>{msg}</span>
+                            </div>
+                        })}
 
-                {move || error_msg.get().map(|msg| view! {
-                    <div class="alert alert-warning py-2 text-sm">
-                        <span>{msg}</span>
-                    </div>
-                })}
+                        <div class="modal-action mt-2">
+                            <button type="button" class="btn btn-ghost" on:click=move |_| set_modal_offen.set(false)>
+                                "Abbrechen"
+                            </button>
+                            <button
+                                type="submit"
+                                class="btn btn-primary"
+                                disabled=move || create_action.pending().get()
+                            >
+                                "Hinzufügen"
+                            </button>
+                        </div>
+                    </form>
+                </Modal>
 
                 // Tabelle Aufgaben (Spalten: Erledigt, Datum, Beschreibung, Benutzer)
                 <div class="overflow-x-auto -mx-2 sm:mx-0">
