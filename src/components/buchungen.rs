@@ -314,7 +314,7 @@ pub fn BuchungenSection() -> impl IntoView {
                                     view! {
                                         <table class="table table-zebra table-xs w-full">
                                             <thead>
-                                                <tr class="text-xs sm:text-sm uppercase text-base-content/70">
+                                                <tr class="text-xs uppercase text-base-content/70">
                                                     <th class="w-32">"Datum"</th>
                                                     <th>"Buchungstext"</th>
                                                     <th class="w-40">"Benutzer"</th>
@@ -358,7 +358,7 @@ pub fn BuchungenSection() -> impl IntoView {
 
                                                         view! {
                                                             <tr class="select-none" title="Doppelklick zum Bearbeiten" on:dblclick=move |_| bearbeiten_oeffnen(zeile_dbl.clone())>
-                                                                <td class="whitespace-nowrap text-base-content/80 font-mono text-xs sm:text-sm">
+                                                                <td class="whitespace-nowrap text-base-content/80 font-mono text-xs">
                                                                     {datum_str}
                                                                 </td>
                                                                 <td class="font-medium">
@@ -399,11 +399,11 @@ pub fn BuchungenSection() -> impl IntoView {
                                                 }}
                                             </tbody>
                                             <tfoot>
-                                                <tr class="font-bold text-sm sm:text-base bg-base-200/50">
+                                                <tr class="font-bold text-xs bg-base-200/50">
                                                     <td colspan="3">
                                                         <div class="flex flex-col sm:flex-row sm:gap-2">
                                                             <span>"Saldo"</span>
-                                                            <span class="text-xs sm:text-sm font-normal text-base-content/70">
+                                                            <span class="text-xs font-normal text-base-content/70">
                                                                 {format!("(Eingänge: +CHF {:.2} | Ausgänge: -CHF {:.2})", summe_eingang, summe_ausgang)}
                                                             </span>
                                                         </div>

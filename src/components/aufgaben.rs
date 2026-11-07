@@ -211,7 +211,7 @@ pub fn AufgabenSection() -> impl IntoView {
                                     view! {
                                         <table class="table table-zebra table-xs w-full">
                                             <thead>
-                                                <tr class="text-xs sm:text-sm uppercase text-base-content/70">
+                                                <tr class="text-xs uppercase text-base-content/70">
                                                     <th class="w-16 text-center">"Erledigt"</th>
                                                     <th class="w-32">"Datum"</th>
                                                     <th>"Beschreibung"</th>
@@ -237,9 +237,9 @@ pub fn AufgabenSection() -> impl IntoView {
                                                         let zeile_dbl = a.clone();
 
                                                         let datum_class = if is_erledigt {
-                                                            "whitespace-nowrap font-mono text-xs sm:text-sm line-through text-base-content/40"
+                                                            "whitespace-nowrap font-mono text-xs line-through text-base-content/40"
                                                         } else {
-                                                            "whitespace-nowrap font-mono text-xs sm:text-sm text-base-content/80"
+                                                            "whitespace-nowrap font-mono text-xs text-base-content/80"
                                                         };
 
                                                         let beschreibung_class = if is_erledigt {
@@ -295,7 +295,7 @@ pub fn AufgabenSection() -> impl IntoView {
                                                 }}
                                             </tbody>
                                             <tfoot>
-                                                <tr class="font-bold text-sm sm:text-base bg-base-200/50">
+                                                <tr class="font-bold text-xs bg-base-200/50">
                                                     <td colspan="3">"Status"</td>
                                                     <td class="text-primary">
                                                         {format!("{offene} offen / {gesamt} gesamt")}
