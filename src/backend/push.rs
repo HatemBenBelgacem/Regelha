@@ -77,16 +77,25 @@ mod store {
 pub async fn get_push_public_key() -> Result<String, ServerFnError> {
     #[cfg(feature = "ssr")]
     {
-        let schluessel = std::env::var("VAPID_PUBLIC_KEY")
-            .unwrap_or_default()
-            .trim()
-            .to_string();
-        if schluessel.is_empty() {
-            return Err(ServerFnError::new(
-                "Push-Benachrichtigungen sind auf dem Server nicht eingerichtet.",
-            ));
+        let schluessel = env_wert("VAPID_PUBLIC_KEY");
+        let privat = env_wert("VAPID_PRIVATE_KEY");
+
+        // Genau benennen, welche Variable fehlt. Die Meldung erscheint im Browser und im Log.
+        let mut fehlend = Vec::new();
+        if schluessel.is_none() {
+            fehlend.push("VAPID_PUBLIC_KEY");
         }
-        Ok(schluessel)
+        if privat.is_none() {
+            fehlend.push("VAPID_PRIVATE_KEY");
+        }
+        if !fehlend.is_empty() {
+            let liste = fehlend.join(", ");
+            tracing::warn!("Push: Umgebungsvariablen fehlen: {liste}");
+            return Err(ServerFnError::new(format!(
+                "Auf dem Server fehlen die Umgebungsvariablen {liste}. Bitte in Railway setzen und die App neu deployen."
+            )));
+        }
+        Ok(schluessel.unwrap_or_default())
     }
 
     #[cfg(not(feature = "ssr"))]
