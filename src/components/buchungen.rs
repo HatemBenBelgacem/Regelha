@@ -3,7 +3,7 @@ use leptos::prelude::*;
 
 use crate::components::modal::Modal;
 use crate::backend::budget::{
-    add_buchung, delete_buchung, get_buchungen, update_buchung, BuchungsArt,
+    add_buchung, delete_buchung, get_buchungen, update_buchung, Buchung, BuchungsArt,
 };
 
 /// Heutiges Datum im Format JJJJ-MM-TT (für das Datumsfeld).
@@ -92,6 +92,17 @@ pub fn BuchungenSection() -> impl IntoView {
             buchungen_resource.refetch();
         }
     });
+
+    // Öffnet das Formular mit den Werten einer bestehenden Buchung (Doppelklick oder ✎)
+    let bearbeiten_oeffnen = move |b: Buchung| {
+        set_error_msg.set(None);
+        set_bearbeiten_id.set(Some(b.id));
+        set_buchungstext.set(b.buchungstext.clone());
+        set_betrag_input.set(format!("{:.2}", b.betrag));
+        set_art.set(b.art);
+        set_datum_input.set(b.erstellt_am.format("%Y-%m-%d").to_string());
+        set_modal_offen.set(true);
+    };
 
     let on_submit = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
@@ -341,11 +352,12 @@ pub fn BuchungenSection() -> impl IntoView {
                                                         };
                                                         let datum_str = b.erstellt_am.format("%d.%m.%Y").to_string();
                                                         let bearbeiten = b.clone();
+                                                        let zeile_dbl = b.clone();
                                                         let benutzer_name = b.benutzer;
                                                         let id = b.id;
 
                                                         view! {
-                                                            <tr>
+                                                            <tr class="select-none" title="Doppelklick zum Bearbeiten" on:dblclick=move |_| bearbeiten_oeffnen(zeile_dbl.clone())>
                                                                 <td class="whitespace-nowrap text-base-content/80 font-mono text-xs sm:text-sm">
                                                                     {datum_str}
                                                                 </td>
@@ -367,15 +379,7 @@ pub fn BuchungenSection() -> impl IntoView {
                                                                         class="btn btn-ghost"
                                                                         title="Buchung bearbeiten"
                                                                         aria-label="Buchung bearbeiten"
-                                                                        on:click=move |_| {
-                                                                            set_error_msg.set(None);
-                                                                            set_bearbeiten_id.set(Some(id));
-                                                                            set_buchungstext.set(bearbeiten.buchungstext.clone());
-                                                                            set_betrag_input.set(format!("{:.2}", bearbeiten.betrag));
-                                                                            set_art.set(bearbeiten.art);
-                                                                            set_datum_input.set(bearbeiten.erstellt_am.format("%Y-%m-%d").to_string());
-                                                                            set_modal_offen.set(true);
-                                                                        }
+                                                                        on:click=move |_| bearbeiten_oeffnen(bearbeiten.clone())
                                                                     >
                                                                         "✎"
                                                                     </button>
@@ -383,6 +387,7 @@ pub fn BuchungenSection() -> impl IntoView {
                                                                         type="button"
                                                                         class="btn btn-ghost text-error"
                                                                         title="Eintrag löschen"
+                                                                        on:dblclick=move |ev| { ev.stop_propagation(); }
                                                                         on:click=move |_| { delete_action.dispatch(id); }
                                                                     >
                                                                         "✕"

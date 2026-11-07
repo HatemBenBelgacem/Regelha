@@ -3,7 +3,7 @@ use leptos::prelude::*;
 
 use crate::components::modal::Modal;
 use crate::backend::aufgaben::{
-    add_aufgabe, delete_aufgabe, get_aufgaben, toggle_aufgabe_erledigt, update_aufgabe,
+    add_aufgabe, delete_aufgabe, get_aufgaben, toggle_aufgabe_erledigt, update_aufgabe, Aufgabe,
 };
 
 /// Heutiges Datum im Format JJJJ-MM-TT (für das Datumsfeld).
@@ -87,6 +87,15 @@ pub fn AufgabenSection() -> impl IntoView {
             aufgaben_resource.refetch();
         }
     });
+
+    // Öffnet das Formular mit den Werten einer bestehenden Aufgabe (Doppelklick oder ✎)
+    let bearbeiten_oeffnen = move |a: Aufgabe| {
+        set_error_msg.set(None);
+        set_bearbeiten_id.set(Some(a.id));
+        set_beschreibung.set(a.beschreibung.clone());
+        set_datum_input.set(a.datum.format("%Y-%m-%d").to_string());
+        set_modal_offen.set(true);
+    };
 
     let on_submit = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
@@ -225,6 +234,7 @@ pub fn AufgabenSection() -> impl IntoView {
                                                         let id = a.id;
                                                         let is_erledigt = a.erledigt;
                                                         let bearbeiten = a.clone();
+                                                        let zeile_dbl = a.clone();
 
                                                         let datum_class = if is_erledigt {
                                                             "whitespace-nowrap font-mono text-xs sm:text-sm line-through text-base-content/40"
@@ -239,12 +249,13 @@ pub fn AufgabenSection() -> impl IntoView {
                                                         };
 
                                                         view! {
-                                                            <tr>
+                                                            <tr class="select-none" title="Doppelklick zum Bearbeiten" on:dblclick=move |_| bearbeiten_oeffnen(zeile_dbl.clone())>
                                                                 <td class="text-center">
                                                                     <input
                                                                         type="checkbox"
                                                                         class="checkbox checkbox-primary checkbox-sm"
                                                                         prop:checked=is_erledigt
+                                                                        on:dblclick=move |ev| { ev.stop_propagation(); }
                                                                         on:change=move |ev| {
                                                                             let checked = event_target_checked(&ev);
                                                                             toggle_action.dispatch((id, checked));
@@ -264,13 +275,7 @@ pub fn AufgabenSection() -> impl IntoView {
                                                                         class="btn btn-ghost"
                                                                         title="Aufgabe bearbeiten"
                                                                         aria-label="Aufgabe bearbeiten"
-                                                                        on:click=move |_| {
-                                                                            set_error_msg.set(None);
-                                                                            set_bearbeiten_id.set(Some(id));
-                                                                            set_beschreibung.set(bearbeiten.beschreibung.clone());
-                                                                            set_datum_input.set(bearbeiten.datum.format("%Y-%m-%d").to_string());
-                                                                            set_modal_offen.set(true);
-                                                                        }
+                                                                        on:click=move |_| bearbeiten_oeffnen(bearbeiten.clone())
                                                                     >
                                                                         "✎"
                                                                     </button>
@@ -278,6 +283,7 @@ pub fn AufgabenSection() -> impl IntoView {
                                                                         type="button"
                                                                         class="btn btn-ghost text-error"
                                                                         title="Aufgabe löschen"
+                                                                        on:dblclick=move |ev| { ev.stop_propagation(); }
                                                                         on:click=move |_| { delete_action.dispatch(id); }
                                                                     >
                                                                         "✕"

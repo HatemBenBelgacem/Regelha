@@ -1,3 +1,4 @@
+use chrono::{Datelike, Local};
 use leptos::prelude::*;
 use uuid::Uuid;
 
@@ -64,8 +65,8 @@ fn fixkosten_zelle(betrag: Option<f64>) -> Zelle {
 /// Sortiert nach Beginn: der älteste Vertrag steht oben.
 fn fixkosten_eindeutig(monate: &[MonatsKosten]) -> Vec<FixkostenPosten> {
     let mut liste: Vec<FixkostenPosten> = Vec::new();
-    // Die Monate kommen neueste zuerst. Rückwärts gelesen ist der älteste Monat vorne.
-    for monat in monate.iter().rev() {
+    // Die Monate kommen Januar bis Dezember. So steht ein Vertrag an der Stelle seines Beginns.
+    for monat in monate.iter() {
         for posten in &monat.fixkosten_posten {
             if !liste.iter().any(|p| p.id == posten.id) {
                 liste.push(posten.clone());
@@ -180,8 +181,14 @@ fn monatstabelle(monate: Vec<MonatsKosten>) -> impl IntoView {
         })
         .collect();
 
-    let anzahl_monate = monate.len().max(1) as f64;
-    let total_summe: f64 = monate.iter().map(|m| m.total_kosten).sum();
+    // Der Durchschnitt zählt nur Monate bis heute. Zukunftsmonate enthalten nur die Prognose.
+    let heute = Local::now().date_naive();
+    let vergangene: Vec<&MonatsKosten> = monate
+        .iter()
+        .filter(|m| (m.jahr, m.monat) <= (heute.year(), heute.month()))
+        .collect();
+    let anzahl_monate = vergangene.len().max(1) as f64;
+    let total_summe: f64 = vergangene.iter().map(|m| m.total_kosten).sum();
     let summen = vec![
         summen_zeile(
             "Einnahmen",
@@ -263,7 +270,7 @@ pub fn MonatskostenSection() -> impl IntoView {
                 <div>
                     <h2 class="card-title text-lg sm:text-xl">"Kosten pro Monat"</h2>
                     <p class="text-xs sm:text-sm text-base-content/70">
-                        "Monatliche Übersicht deiner Einnahmen, Ausgaben und Fixkosten in CHF"
+                        "Übersicht über das ganze Jahr: Einnahmen, Ausgaben und Fixkosten in CHF"
                     </p>
                 </div>
 
@@ -287,7 +294,7 @@ pub fn MonatskostenSection() -> impl IntoView {
                 </div>
 
                 <p class="text-xs text-base-content/60">
-                    "Total Kosten = Ausgaben + Fixkosten. Fixkosten zählen ab ihrem Beginnmonat, solange sie nicht beendet sind. Vierteljährliche, halbjährliche und jährliche Zahlungen werden auf den Monat umgerechnet. Ein Strich (–) bedeutet: In diesem Monat fällt für diese Fixkosten nichts an."
+                    "Total Kosten = Ausgaben + Fixkosten. Fixkosten zählen ab ihrem Beginnmonat, solange sie nicht beendet sind. Vierteljährliche, halbjährliche und jährliche Zahlungen werden auf den Monat umgerechnet. Ein Strich (–) bedeutet: In diesem Monat fällt für diese Fixkosten nichts an. Ab dem aktuellen Monat zeigt die Tabelle nur die Fixkosten als Prognose."
                 </p>
             </div>
         </section>

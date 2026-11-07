@@ -942,26 +942,17 @@ pub struct MonatsKosten {
 /// Gruppiert Buchungen nach Monat und rechnet die monatlichen Fixkosten dazu.
 /// Fixkosten zählen ab ihrem Beginnmonat, solange sie nicht beendet sind; nicht monatliche
 /// Zahlungen werden auf den Monat umgerechnet (z.B. Jahresbetrag / 12).
-/// Die Liste reicht vom Monat der ältesten Buchung bis zum `bis`-Monat (neuester Monat zuerst).
+/// Die Liste umfasst alle zwölf Monate des Jahres von `bis` (Januar bis Dezember, älteste zuerst).
+/// Monate in der Zukunft enthalten nur die Fixkosten als Prognose.
 pub fn berechne_monatskosten(
     buchungen: &[Buchung],
     fixkosten: &[FixkostenEintrag],
     bis: NaiveDate,
 ) -> Vec<MonatsKosten> {
-    let monats_index = |jahr: i32, monat: u32| jahr * 12 + (monat as i32 - 1);
-    let ende = monats_index(bis.year(), bis.month());
-    let start = buchungen
-        .iter()
-        .map(|b| monats_index(b.erstellt_am.year(), b.erstellt_am.month()))
-        .min()
-        .unwrap_or(ende)
-        .min(ende);
+    let jahr = bis.year();
 
-    (start..=ende)
-        .rev()
-        .map(|idx| {
-            let jahr = idx.div_euclid(12);
-            let monat = idx.rem_euclid(12) as u32 + 1;
+    (1..=12u32)
+        .map(|monat| {
             let im_monat = buchungen
                 .iter()
                 .filter(|b| b.erstellt_am.year() == jahr && b.erstellt_am.month() == monat);
@@ -1072,9 +1063,10 @@ mod tests {
         assert_eq!(zeilen[0].fixkosten, 1100.0);
         // Zwei Verträge zählen im Januar 2026: der monatliche und der jährliche (anteilig)
         assert_eq!(zeilen[0].fixkosten_posten.len(), 2);
-        // November 2025: jährlicher Vertrag hat noch nicht begonnen
+        // Die Liste zeigt nur das Jahr 2026, also kein November 2025
         let nov = zeilen.iter().find(|z| (z.jahr, z.monat) == (2025, 11));
-        assert!(nov.is_none(), "ohne Buchungen beginnt die Liste beim aktuellen Monat");
+        assert!(nov.is_none(), "die Liste umfasst nur das Jahr von `bis`");
+        assert_eq!(zeilen.len(), 12);
 
         assert_eq!(liste[1].monatsbetrag(), 100.0);
         assert!(!liste[1].zaehlt_im_monat(2025, 11));
@@ -1083,8 +1075,9 @@ mod tests {
     }
 
     #[test]
-    fn monatskosten_ueber_jahreswechsel() {
+    fn monatskosten_ganzes_jahr() {
         let buchungen = vec![
+            // Buchungen aus dem Vorjahr zählen nicht in die Jahresübersicht 2026
             buchung((2025, 11, 3), 100.0, BuchungsArt::Ausgang),
             buchung((2025, 11, 20), 50.0, BuchungsArt::Ausgang),
             buchung((2026, 1, 1), 3000.0, BuchungsArt::Eingang),
@@ -1093,26 +1086,33 @@ mod tests {
         let fix = vec![fixkosten(1000.0, (2024, 1, 1), Zahlungsperiode::Monatlich, FixkostenStatus::Aktiv)];
         let zeilen = berechne_monatskosten(&buchungen, &fix, bis);
 
-        assert_eq!(zeilen.len(), 3);
+        // Alle zwölf Monate, älteste zuerst
+        assert_eq!(zeilen.len(), 12);
         assert_eq!((zeilen[0].jahr, zeilen[0].monat), (2026, 1));
-        assert_eq!((zeilen[1].jahr, zeilen[1].monat), (2025, 12));
-        assert_eq!((zeilen[2].jahr, zeilen[2].monat), (2025, 11));
+        assert_eq!((zeilen[11].jahr, zeilen[11].monat), (2026, 12));
 
-        assert_eq!(zeilen[2].ausgaben, 150.0);
-        assert_eq!(zeilen[2].total_kosten, 1150.0);
-        assert_eq!(zeilen[2].fixkosten_posten.len(), 1);
-        assert_eq!(zeilen[2].fixkosten_posten[0].monatsbetrag, 1000.0);
-        assert_eq!(zeilen[2].anzahl_buchungen, 2);
-        assert_eq!(zeilen[1].total_kosten, 1000.0);
-        assert_eq!(zeilen[0].saldo, 2000.0);
+        // Januar: Eingang 3000, Fixkosten 1000
         assert_eq!(zeilen[0].monat_name, "Januar 2026");
+        assert_eq!(zeilen[0].anzahl_buchungen, 1);
+        assert_eq!(zeilen[0].total_kosten, 1000.0);
+        assert_eq!(zeilen[0].saldo, 2000.0);
+
+        // Dezember (Zukunft): nur die Fixkosten als Prognose
+        assert_eq!(zeilen[11].einnahmen, 0.0);
+        assert_eq!(zeilen[11].fixkosten, 1000.0);
+        assert_eq!(zeilen[11].total_kosten, 1000.0);
+
+        // Die Ausgaben aus 2025 sind nicht enthalten
+        assert_eq!(zeilen.iter().map(|z| z.ausgaben).sum::<f64>(), 0.0);
     }
 
     #[test]
     fn monatskosten_ohne_buchungen() {
         let bis = NaiveDate::from_ymd_opt(2026, 11, 6).unwrap();
         let zeilen = berechne_monatskosten(&[], &[], bis);
-        assert_eq!(zeilen.len(), 1);
-        assert_eq!(zeilen[0].monat_name, "November 2026");
+        assert_eq!(zeilen.len(), 12);
+        assert_eq!(zeilen[0].monat_name, "Januar 2026");
+        assert_eq!(zeilen[11].monat_name, "Dezember 2026");
+        assert!(zeilen.iter().all(|z| z.total_kosten == 0.0));
     }
 }
