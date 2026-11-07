@@ -15,6 +15,25 @@
     return bytes;
   }
 
+  // Zeigt die Antwort des Servers, wenn etwas fehlschlägt, damit der Grund sichtbar ist.
+  async function serverFehler(antwort) {
+    let text = '';
+    try {
+      text = (await antwort.text()).trim();
+    } catch (e) {
+      text = '';
+    }
+    if (text.startsWith('<')) {
+      return 'fehler:Unerwartete Antwort des Servers (Status ' + antwort.status + ').';
+    }
+    // Leptos stellt Server-Fehlern ein Kennzeichen voran (z.B. "ServerError|"). Das ist für Menschen nicht nötig.
+    text = text.replace(/^ServerError\|/, '');
+    if (text.length > 300) {
+      text = text.slice(0, 300) + '…';
+    }
+    return 'fehler:' + (text || 'Der Server hat keinen Fehlertext geschickt') + ' (Status ' + antwort.status + ')';
+  }
+
   function unterstuetzt() {
     return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
   }
@@ -45,7 +64,7 @@
         body: '{}',
       });
       if (!schluesselAntwort.ok) {
-        return 'fehler:Push-Benachrichtigungen sind auf dem Server nicht eingerichtet.';
+        return await serverFehler(schluesselAntwort);
       }
       const schluessel = await schluesselAntwort.json();
 
@@ -69,7 +88,7 @@
         }),
       });
       if (!antwort.ok) {
-        return 'fehler:Das Gerät konnte nicht gespeichert werden.';
+        return await serverFehler(antwort);
       }
       return 'ok';
     } catch (e) {
