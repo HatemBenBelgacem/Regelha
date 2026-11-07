@@ -358,9 +358,9 @@ pub fn FixkostenSection() -> impl IntoView {
                                         .sum();
 
                                     view! {
-                                        <table class="table table-zebra table-sm sm:table-md w-full">
+                                        <table class="table table-zebra table-xs w-full">
                                             <thead>
-                                                <tr class="text-xs sm:text-sm uppercase text-base-content/70">
+                                                <tr class="text-xs uppercase text-base-content/70">
                                                     <th>"Buchungstext"</th>
                                                     <th>"Beginn"</th>
                                                     <th>"Periode"</th>
@@ -395,7 +395,7 @@ pub fn FixkostenSection() -> impl IntoView {
                                                         view! {
                                                             <tr class=format!("{zeilen_class} select-none") title="Doppelklick zum Bearbeiten" on:dblclick=move |_| bearbeiten_oeffnen(zeile_dbl.clone())>
                                                                 <td class="font-medium">{f.buchungstext}</td>
-                                                                <td class="whitespace-nowrap font-mono text-xs sm:text-sm text-base-content/80">
+                                                                <td class="whitespace-nowrap font-mono text-xs text-base-content/80">
                                                                     {f.beginndatum.format("%d.%m.%Y").to_string()}
                                                                 </td>
                                                                 <td class="whitespace-nowrap">{f.zahlungsperiode.label()}</td>
@@ -454,7 +454,7 @@ pub fn FixkostenSection() -> impl IntoView {
                                                 }}
                                             </tbody>
                                             <tfoot>
-                                                <tr class="font-bold text-sm sm:text-base bg-base-200/50">
+                                                <tr class="font-bold text-xs bg-base-200/50">
                                                     <td colspan="5">
                                                         <div class="flex flex-col">
                                                             <span>"Summe Fixkosten pro Monat"</span>

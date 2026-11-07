@@ -146,7 +146,7 @@ fn fixkosten_zeile_view(zeile: FixkostenZeile) -> impl IntoView {
 fn summen_zeile_view(zeile: SummenZeile) -> impl IntoView {
     let SummenZeile { titel, untertitel, zellen, summe } = zeile;
     view! {
-        <tr class="font-bold text-sm sm:text-base bg-base-200/50">
+        <tr class="font-bold text-xs bg-base-200/50">
             <td class="sticky left-0 z-10 bg-base-200 whitespace-nowrap">
                 <div class="flex flex-col">
                     <span>{titel}</span>
@@ -235,9 +235,9 @@ fn monatstabelle(monate: Vec<MonatsKosten>) -> impl IntoView {
     let colspan = (monate.len() + 2).to_string();
 
     view! {
-        <table class="table table-zebra table-sm sm:table-md w-full">
+        <table class="table table-zebra table-xs w-full">
             <thead>
-                <tr class="text-xs sm:text-sm uppercase text-base-content/70">
+                <tr class="text-xs uppercase text-base-content/70">
                     <th class="sticky left-0 z-10 bg-base-100">"Fixkosten"</th>
                     {kopf.into_iter().map(kopf_view).collect_view()}
                     <th class="text-right">"Summe"</th>
