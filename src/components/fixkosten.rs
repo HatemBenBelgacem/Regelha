@@ -139,6 +139,19 @@ pub fn FixkostenSection() -> impl IntoView {
         }
     });
 
+    // Öffnet das Formular mit den Werten eines bestehenden Vertrags (Doppelklick oder ✎)
+    let bearbeiten_oeffnen = move |f: FixkostenEintrag| {
+        set_error_msg.set(None);
+        set_bearbeiten_id.set(Some(f.id));
+        set_buchungstext.set(f.buchungstext.clone());
+        set_betrag_input.set(format!("{:.2}", f.betrag));
+        set_beginndatum.set(f.beginndatum.format("%Y-%m-%d").to_string());
+        set_kuendigungsfrist.set(f.kuendigungsfrist_monate);
+        set_zahlungsperiode.set(f.zahlungsperiode);
+        set_status.set(f.status);
+        set_modal_offen.set(true);
+    };
+
     let on_submit = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
         let text = buchungstext.get();
@@ -378,8 +391,9 @@ pub fn FixkostenSection() -> impl IntoView {
                                                             ""
                                                         };
                                                         let bearbeiten = f.clone();
+                                                        let zeile_dbl = f.clone();
                                                         view! {
-                                                            <tr class=zeilen_class>
+                                                            <tr class=format!("{zeilen_class} select-none") title="Doppelklick zum Bearbeiten" on:dblclick=move |_| bearbeiten_oeffnen(zeile_dbl.clone())>
                                                                 <td class="font-medium">{f.buchungstext}</td>
                                                                 <td class="whitespace-nowrap font-mono text-xs sm:text-sm text-base-content/80">
                                                                     {f.beginndatum.format("%d.%m.%Y").to_string()}
@@ -390,6 +404,7 @@ pub fn FixkostenSection() -> impl IntoView {
                                                                     <select
                                                                         class=status_select_class(aktueller_status)
                                                                         aria-label="Status ändern"
+                                                                        on:dblclick=move |ev| { ev.stop_propagation(); }
                                                                         disabled=move || status_action.pending().get()
                                                                         on:change=move |ev| {
                                                                             let neu = FixkostenStatus::from_db_str(&event_target_value(&ev));
@@ -419,17 +434,7 @@ pub fn FixkostenSection() -> impl IntoView {
                                                                         class="btn btn-ghost"
                                                                         title="Fixkosten bearbeiten"
                                                                         aria-label="Fixkosten bearbeiten"
-                                                                        on:click=move |_| {
-                                                                            set_error_msg.set(None);
-                                                                            set_bearbeiten_id.set(Some(id));
-                                                                            set_buchungstext.set(bearbeiten.buchungstext.clone());
-                                                                            set_betrag_input.set(format!("{:.2}", bearbeiten.betrag));
-                                                                            set_beginndatum.set(bearbeiten.beginndatum.format("%Y-%m-%d").to_string());
-                                                                            set_kuendigungsfrist.set(bearbeiten.kuendigungsfrist_monate);
-                                                                            set_zahlungsperiode.set(bearbeiten.zahlungsperiode);
-                                                                            set_status.set(bearbeiten.status);
-                                                                            set_modal_offen.set(true);
-                                                                        }
+                                                                        on:click=move |_| bearbeiten_oeffnen(bearbeiten.clone())
                                                                     >
                                                                         "✎"
                                                                     </button>
@@ -437,6 +442,7 @@ pub fn FixkostenSection() -> impl IntoView {
                                                                         type="button"
                                                                         class="btn btn-ghost text-error"
                                                                         title="Fixkosten löschen"
+                                                                        on:dblclick=move |ev| { ev.stop_propagation(); }
                                                                         on:click=move |_| { delete_action.dispatch(id); }
                                                                     >
                                                                         "✕"
