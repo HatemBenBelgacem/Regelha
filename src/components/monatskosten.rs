@@ -235,7 +235,7 @@ fn monatstabelle(monate: Vec<MonatsKosten>) -> impl IntoView {
     let colspan = (monate.len() + 2).to_string();
 
     view! {
-        <table class="table table-zebra table-sm sm:table-md w-full">
+        <table class="table table-zebra table-xs w-full">
             <thead>
                 <tr class="text-xs sm:text-sm uppercase text-base-content/70">
                     <th class="sticky left-0 z-10 bg-base-100">"Fixkosten"</th>

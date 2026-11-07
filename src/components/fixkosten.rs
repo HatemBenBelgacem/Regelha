@@ -358,7 +358,7 @@ pub fn FixkostenSection() -> impl IntoView {
                                         .sum();
 
                                     view! {
-                                        <table class="table table-zebra table-sm sm:table-md w-full">
+                                        <table class="table table-zebra table-xs w-full">
                                             <thead>
                                                 <tr class="text-xs sm:text-sm uppercase text-base-content/70">
                                                     <th>"Buchungstext"</th>
