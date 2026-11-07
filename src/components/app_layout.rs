@@ -81,8 +81,9 @@ pub fn AppLayout() -> impl IntoView {
                                     </main>
                                 </div>
 
-                                // Sideboard (Navigationen)
-                                <div class="drawer-side z-30">
+                                // Sideboard (Navigationen). Auf dem Desktop beginnt sie unter dem Kopfbereich (h-14 = 3.5rem),
+                                // liegt darunter (z-10) und ist genau so hoch wie der restliche Bildschirm.
+                                <div class="drawer-side z-30 lg:z-10 lg:top-14 lg:h-[calc(100vh_-_3.5rem)]">
                                     <label for="app-sideboard-drawer" aria-label="Navigation schließen" class="drawer-overlay"></label>
                                     <Sideboard on_navigate=close_drawer/>
                                 </div>
