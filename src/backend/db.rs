@@ -27,7 +27,7 @@ pub async fn init_db_pool() -> Option<PgPool> {
                 if let Err(err) = run_schema_init(&pool).await {
                     log!("Warnung: Tabellen konnten nicht initialisiert werden: {err}");
                 } else {
-                    log!("PostgreSQL-Verbindung und Tabellen (benutzer, buchungen, fixkosten, aufgaben, chat, rel_benutzer_chat, nachricht) bereit.");
+                    log!("PostgreSQL-Verbindung und Tabellen (benutzer, buchungen, fixkosten, aufgaben, kontakte, schulden, chat, rel_benutzer_chat, nachricht) bereit.");
                 }
                 Some(pool)
             }
@@ -303,6 +303,35 @@ async fn run_schema_init(pool: &PgPool) -> Result<(), sqlx::Error> {
             p256dh TEXT NOT NULL,
             auth TEXT NOT NULL,
             erstellt_am TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
+    // 10. Tabelle `kontakte` (Felder: vorname, nachname) mit N:1-Relation zur Tabelle `benutzer`
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS kontakte (
+            id UUID PRIMARY KEY,
+            vorname TEXT NOT NULL,
+            nachname TEXT NOT NULL DEFAULT '',
+            benutzer_id UUID NOT NULL REFERENCES benutzer(id) ON DELETE CASCADE
+        );
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
+    // 11. Tabelle `schulden` (Felder: datum, grund, betrag) mit N:1-Relation zur Tabelle `benutzer`
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS schulden (
+            id UUID PRIMARY KEY,
+            datum DATE NOT NULL DEFAULT CURRENT_DATE,
+            grund TEXT NOT NULL,
+            betrag DOUBLE PRECISION NOT NULL,
+            benutzer_id UUID NOT NULL REFERENCES benutzer(id) ON DELETE CASCADE
         );
         "#,
     )

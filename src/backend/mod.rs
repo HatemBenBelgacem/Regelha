@@ -4,7 +4,9 @@ pub mod budget;
 pub mod chat;
 #[cfg(feature = "ssr")]
 pub mod db;
+pub mod kontakte;
 pub mod push;
+pub mod schulden;
 
 #[cfg(feature = "ssr")]
 pub fn register_server_functions() {
@@ -35,6 +37,18 @@ pub fn register_server_functions() {
     register_explicit::<aufgaben::UpdateAufgabe>();
     register_explicit::<aufgaben::ToggleAufgabeErledigt>();
     register_explicit::<aufgaben::DeleteAufgabe>();
+
+    // Schulden Server Functions
+    register_explicit::<schulden::GetSchulden>();
+    register_explicit::<schulden::AddSchuld>();
+    register_explicit::<schulden::UpdateSchuld>();
+    register_explicit::<schulden::DeleteSchuld>();
+
+    // Kontakte Server Functions
+    register_explicit::<kontakte::GetKontakte>();
+    register_explicit::<kontakte::AddKontakt>();
+    register_explicit::<kontakte::UpdateKontakt>();
+    register_explicit::<kontakte::DeleteKontakt>();
 
     // Chat Server Functions
     register_explicit::<chat::GetChatUebersicht>();
