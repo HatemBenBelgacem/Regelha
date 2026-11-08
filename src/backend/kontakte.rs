@@ -22,8 +22,8 @@ pub fn anzeigename(vorname: &str, nachname: &str) -> String {
 }
 
 #[cfg(feature = "ssr")]
-const KONTAKT_HAT_SCHULDEN: &str =
-    "Dieser Kontakt hat noch Schulden und kann nicht gelöscht werden.";
+const KONTAKT_HAT_EINTRAEGE: &str =
+    "Dieser Kontakt hat noch Schulden oder Rückzahlungen und kann nicht gelöscht werden.";
 
 #[cfg(feature = "ssr")]
 pub(crate) mod store {
@@ -216,7 +216,7 @@ pub async fn update_kontakt(
     Ok(())
 }
 
-/// Löscht einen Kontakt. Das ist nur möglich, wenn keine Schulden mehr darauf verweisen.
+/// Löscht einen Kontakt. Das ist nur möglich, wenn keine Schulden oder Rückzahlungen mehr darauf verweisen.
 #[server(
     DeleteKontakt,
     "/api",
@@ -233,7 +233,7 @@ pub async fn delete_kontakt(id: Uuid) -> Result<(), ServerFnError> {
 
         if let Some(pool) = use_context::<PgPool>() {
             let anzahl: i64 = sqlx::query_scalar(
-                "SELECT COUNT(*) FROM schulden WHERE kontakt_id = $1 AND benutzer_id = $2",
+                "SELECT (SELECT COUNT(*) FROM schulden WHERE kontakt_id = $1 AND benutzer_id = $2) + (SELECT COUNT(*) FROM rueckzahlungen WHERE kontakt_id = $1 AND benutzer_id = $2)",
             )
             .bind(id)
             .bind(current_user.id)
@@ -241,7 +241,7 @@ pub async fn delete_kontakt(id: Uuid) -> Result<(), ServerFnError> {
             .await
             .map_err(|e| ServerFnError::new(format!("DB-Fehler (schulden): {e}")))?;
             if anzahl > 0 {
-                return Err(ServerFnError::new(KONTAKT_HAT_SCHULDEN));
+                return Err(ServerFnError::new(KONTAKT_HAT_EINTRAEGE));
             }
 
             sqlx::query("DELETE FROM kontakte WHERE id = $1 AND benutzer_id = $2")
@@ -257,9 +257,14 @@ pub async fn delete_kontakt(id: Uuid) -> Result<(), ServerFnError> {
             .lock()
             .map_err(|_| ServerFnError::new("Speicher-Lock fehlgeschlagen"))?
             .iter()
-            .any(|s| s.kontakt_id == Some(id) && s.benutzer_id == current_user.id);
+            .any(|s| s.kontakt_id == Some(id) && s.benutzer_id == current_user.id)
+            || crate::backend::rueckzahlungen::store::RUECKZAHLUNGEN_MEMORY
+                .lock()
+                .map_err(|_| ServerFnError::new("Speicher-Lock fehlgeschlagen"))?
+                .iter()
+                .any(|r| r.kontakt_id == id && r.benutzer_id == current_user.id);
         if hat_schulden {
-            return Err(ServerFnError::new(KONTAKT_HAT_SCHULDEN));
+            return Err(ServerFnError::new(KONTAKT_HAT_EINTRAEGE));
         }
 
         let mut guard = store::KONTAKTE_MEMORY

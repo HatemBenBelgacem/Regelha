@@ -10,5 +10,6 @@ pub mod login;
 pub mod modal;
 pub mod monatskosten;
 pub mod push;
+pub mod rueckzahlungen;
 pub mod schulden;
 pub mod sideboard;

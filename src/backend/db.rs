@@ -354,5 +354,25 @@ async fn run_schema_init(pool: &PgPool) -> Result<(), sqlx::Error> {
         .execute(pool)
         .await?;
 
+    // 12. Tabelle `rueckzahlungen` (Felder: datum, betrag) mit N:1-Relation zu `kontakte`:
+    // Viele Rückzahlungen gehören zu einem Kontakt. ON DELETE RESTRICT verhindert, dass ein Kontakt mit Rückzahlungen verschwindet.
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS rueckzahlungen (
+            id UUID PRIMARY KEY,
+            datum DATE NOT NULL DEFAULT CURRENT_DATE,
+            betrag DOUBLE PRECISION NOT NULL,
+            kontakt_id UUID NOT NULL REFERENCES kontakte(id) ON DELETE RESTRICT,
+            benutzer_id UUID NOT NULL REFERENCES benutzer(id) ON DELETE CASCADE
+        );
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
+    sqlx::query("CREATE INDEX IF NOT EXISTS rueckzahlungen_kontakt_id_idx ON rueckzahlungen (kontakt_id);")
+        .execute(pool)
+        .await?;
+
     Ok(())
 }

@@ -6,6 +6,7 @@ pub mod chat;
 pub mod db;
 pub mod kontakte;
 pub mod push;
+pub mod rueckzahlungen;
 pub mod schulden;
 
 #[cfg(feature = "ssr")]
@@ -43,6 +44,12 @@ pub fn register_server_functions() {
     register_explicit::<schulden::AddSchuld>();
     register_explicit::<schulden::UpdateSchuld>();
     register_explicit::<schulden::DeleteSchuld>();
+
+    // Rückzahlungen Server Functions
+    register_explicit::<rueckzahlungen::GetRueckzahlungen>();
+    register_explicit::<rueckzahlungen::AddRueckzahlung>();
+    register_explicit::<rueckzahlungen::UpdateRueckzahlung>();
+    register_explicit::<rueckzahlungen::DeleteRueckzahlung>();
 
     // Kontakte Server Functions
     register_explicit::<kontakte::GetKontakte>();
