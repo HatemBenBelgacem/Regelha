@@ -3,6 +3,7 @@ pub mod aufgaben;
 pub mod buchungen;
 pub mod chat;
 pub mod dashboard;
+pub mod fasten;
 pub mod fixkosten;
 pub mod header;
 pub mod kontakte;

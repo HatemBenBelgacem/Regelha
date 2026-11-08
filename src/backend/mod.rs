@@ -4,6 +4,7 @@ pub mod budget;
 pub mod chat;
 #[cfg(feature = "ssr")]
 pub mod db;
+pub mod fasten;
 pub mod kontakte;
 pub mod push;
 pub mod rueckzahlungen;
@@ -50,6 +51,12 @@ pub fn register_server_functions() {
     register_explicit::<rueckzahlungen::AddRueckzahlung>();
     register_explicit::<rueckzahlungen::UpdateRueckzahlung>();
     register_explicit::<rueckzahlungen::DeleteRueckzahlung>();
+
+    // Fasten Server Functions
+    register_explicit::<fasten::GetFasten>();
+    register_explicit::<fasten::AddFasten>();
+    register_explicit::<fasten::UpdateFasten>();
+    register_explicit::<fasten::DeleteFasten>();
 
     // Kontakte Server Functions
     register_explicit::<kontakte::GetKontakte>();

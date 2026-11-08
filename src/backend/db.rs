@@ -374,5 +374,21 @@ async fn run_schema_init(pool: &PgPool) -> Result<(), sqlx::Error> {
         .execute(pool)
         .await?;
 
+    // 13. Tabelle `fasten` (Felder: datum, beginn, ende als Uhrzeit) mit N:1-Relation zur Tabelle `benutzer`.
+    // Die Dauer wird nicht gespeichert, sondern beim Anzeigen aus Beginn und Ende berechnet.
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS fasten (
+            id UUID PRIMARY KEY,
+            datum DATE NOT NULL DEFAULT CURRENT_DATE,
+            beginn TIME NOT NULL,
+            ende TIME NOT NULL,
+            benutzer_id UUID NOT NULL REFERENCES benutzer(id) ON DELETE CASCADE
+        );
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
     Ok(())
 }
