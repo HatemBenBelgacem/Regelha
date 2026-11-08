@@ -381,10 +381,32 @@ async fn run_schema_init(pool: &PgPool) -> Result<(), sqlx::Error> {
         CREATE TABLE IF NOT EXISTS fasten (
             id UUID PRIMARY KEY,
             datum DATE NOT NULL DEFAULT CURRENT_DATE,
-            beginn TIME NOT NULL,
-            ende TIME NOT NULL,
+            beginn TIMESTAMP NOT NULL,
+            ende TIMESTAMP NOT NULL,
             benutzer_id UUID NOT NULL REFERENCES benutzer(id) ON DELETE CASCADE
         );
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
+    // Migration: Beginn und Ende waren zuerst nur Uhrzeiten (TIME). Bestehende Zeilen bekommen das Datum
+    // aus `datum`. Liegt das Ende vor dem Beginn, war es am Folgetag gemeint. Die Migration läuft nur einmal.
+    sqlx::query(
+        r#"
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'fasten' AND column_name = 'beginn' AND data_type = 'time without time zone'
+            ) THEN
+                ALTER TABLE fasten
+                    ALTER COLUMN beginn TYPE TIMESTAMP USING (datum + beginn),
+                    ALTER COLUMN ende TYPE TIMESTAMP USING (
+                        CASE WHEN ende < beginn THEN datum + 1 + ende ELSE datum + ende END
+                    );
+            END IF;
+        END $$;
         "#,
     )
     .execute(pool)

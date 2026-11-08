@@ -9,7 +9,7 @@ fn heute_iso() -> String {
     Local::now().date_naive().format("%Y-%m-%d").to_string()
 }
 
-/// Dauer als Text, z.B. "16 h 00 min".
+/// Dauer als Text, z.B. "16 h 00 min" oder "30 h 15 min".
 fn dauer_text(minuten: i64) -> String {
     format!("{} h {:02} min", minuten / 60, minuten % 60)
 }
@@ -17,6 +17,7 @@ fn dauer_text(minuten: i64) -> String {
 #[component]
 pub fn FastenSection() -> impl IntoView {
     let (datum_input, set_datum_input) = signal(heute_iso());
+    // Beginn und Ende als Zeitpunkt im Format JJJJ-MM-TTTHH:MM (Eingabe "datetime-local")
     let (beginn_input, set_beginn_input) = signal(String::new());
     let (ende_input, set_ende_input) = signal(String::new());
     let (error_msg, set_error_msg) = signal(Option::<String>::None);
@@ -102,8 +103,8 @@ pub fn FastenSection() -> impl IntoView {
         set_loesch_bestaetigen.set(false);
         set_bearbeiten_id.set(Some(f.id));
         set_datum_input.set(f.datum.format("%Y-%m-%d").to_string());
-        set_beginn_input.set(f.beginn.format("%H:%M").to_string());
-        set_ende_input.set(f.ende.format("%H:%M").to_string());
+        set_beginn_input.set(f.beginn.format("%Y-%m-%dT%H:%M").to_string());
+        set_ende_input.set(f.ende.format("%Y-%m-%dT%H:%M").to_string());
         set_modal_offen.set(true);
     };
 
@@ -124,8 +125,9 @@ pub fn FastenSection() -> impl IntoView {
             set_error_msg.set(Some("Bitte Beginn und Ende eingeben.".to_string()));
             return;
         }
-        if beginn == ende {
-            set_error_msg.set(Some("Beginn und Ende dürfen nicht gleich sein.".to_string()));
+        // Die Zeitpunkte haben alle das Format JJJJ-MM-TTTHH:MM, deshalb stimmt der Textvergleich mit der Reihenfolge überein
+        if ende <= beginn {
+            set_error_msg.set(Some("Das Ende muss nach dem Beginn liegen.".to_string()));
             return;
         }
         set_error_msg.set(None);
@@ -172,8 +174,8 @@ pub fn FastenSection() -> impl IntoView {
                     on_close=Callback::new(move |_| set_modal_offen.set(false))
                     titel=move || if bearbeiten_id.get().is_some() { "Fasten bearbeiten".to_string() } else { "Neues Fasten".to_string() }
                 >
-                    <form on:submit=on_submit class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div class="sm:col-span-3">
+                    <form on:submit=on_submit class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div class="sm:col-span-2">
                             <label class="label py-1">
                                 <span class="label-text font-medium text-sm">"Datum"</span>
                             </label>
@@ -191,7 +193,7 @@ pub fn FastenSection() -> impl IntoView {
                                 <span class="label-text font-medium text-sm">"Beginn"</span>
                             </label>
                             <input
-                                type="time"
+                                type="datetime-local"
                                 class="input input-bordered w-full"
                                 prop:value=move || beginn_input.get()
                                 on:input=move |ev| set_beginn_input.set(event_target_value(&ev))
@@ -204,7 +206,7 @@ pub fn FastenSection() -> impl IntoView {
                                 <span class="label-text font-medium text-sm">"Ende"</span>
                             </label>
                             <input
-                                type="time"
+                                type="datetime-local"
                                 class="input input-bordered w-full"
                                 prop:value=move || ende_input.get()
                                 on:input=move |ev| set_ende_input.set(event_target_value(&ev))
@@ -212,17 +214,17 @@ pub fn FastenSection() -> impl IntoView {
                             />
                         </div>
 
-                        <p class="text-xs text-base-content/60 sm:col-span-3">
-                            "Ist das Ende vor dem Beginn, dauert das Fasten über Mitternacht."
+                        <p class="text-xs text-base-content/60 sm:col-span-2">
+                            "Das Ende muss nach dem Beginn liegen."
                         </p>
 
                         {move || error_msg.get().map(|msg| view! {
-                            <div class="alert alert-warning py-2 text-sm sm:col-span-3">
+                            <div class="alert alert-warning py-2 text-sm sm:col-span-2">
                                 <span>{msg}</span>
                             </div>
                         })}
 
-                        <div class="modal-action sm:col-span-3 mt-2">
+                        <div class="modal-action sm:col-span-2 mt-2">
                             {move || bearbeiten_id.get().map(|id| view! {
                                 <button
                                     type="button"
@@ -272,8 +274,8 @@ pub fn FastenSection() -> impl IntoView {
                                             <thead>
                                                 <tr class="text-xs uppercase text-base-content/70">
                                                     <th class="w-32">"Datum"</th>
-                                                    <th class="w-24">"Beginn"</th>
-                                                    <th class="w-32">"Ende"</th>
+                                                    <th class="w-40">"Beginn"</th>
+                                                    <th class="w-40">"Ende"</th>
                                                     <th class="text-right">"Dauer"</th>
                                                 </tr>
                                             </thead>
@@ -289,10 +291,8 @@ pub fn FastenSection() -> impl IntoView {
                                                 } else {
                                                     items.into_iter().map(|f| {
                                                         let datum_str = f.datum.format("%d.%m.%Y").to_string();
-                                                        let beginn_str = f.beginn.format("%H:%M").to_string();
-                                                        let ende_str = f.ende.format("%H:%M").to_string();
-                                                        // Ende vor Beginn heisst: das Fasten geht über Mitternacht
-                                                        let ueber_mitternacht = f.ende < f.beginn;
+                                                        let beginn_str = f.beginn.format("%d.%m.%Y %H:%M").to_string();
+                                                        let ende_str = f.ende.format("%d.%m.%Y %H:%M").to_string();
                                                         let dauer = dauer_text(dauer_minuten(f.beginn, f.ende));
                                                         let zeile = f.clone();
 
@@ -304,12 +304,7 @@ pub fn FastenSection() -> impl IntoView {
                                                             >
                                                                 <td class="whitespace-nowrap font-mono text-base-content/80">{datum_str}</td>
                                                                 <td class="whitespace-nowrap font-mono">{beginn_str}</td>
-                                                                <td class="whitespace-nowrap font-mono">
-                                                                    {ende_str}
-                                                                    {ueber_mitternacht.then(|| view! {
-                                                                        <span class="text-xs text-base-content/60 ml-1">"(Folgetag)"</span>
-                                                                    })}
-                                                                </td>
+                                                                <td class="whitespace-nowrap font-mono">{ende_str}</td>
                                                                 <td class="text-right whitespace-nowrap font-semibold">{dauer}</td>
                                                             </tr>
                                                         }
