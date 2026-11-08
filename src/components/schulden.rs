@@ -1,4 +1,4 @@
-use chrono::Local;
+use chrono::{Datelike, Local};
 use leptos::prelude::*;
 
 use crate::backend::kontakte::{anzeigename, get_kontakte};
@@ -8,6 +8,35 @@ use crate::components::modal::Modal;
 /// Heutiges Datum im Format JJJJ-MM-TT (für das Datumsfeld).
 fn heute_iso() -> String {
     Local::now().date_naive().format("%Y-%m-%d").to_string()
+}
+
+/// Deutsche Monatsnamen für die Gruppierung (Index 0 = Januar).
+const MONATE: [&str; 12] = [
+    "Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober",
+    "November", "Dezember",
+];
+
+/// Gruppiert die Schulden nach Monat, z.B. ("November 2026", [...]).
+/// Die Liste kommt bereits nach Datum absteigend sortiert, deshalb reicht ein Durchgang.
+fn nach_monat(items: Vec<Schuld>) -> Vec<(String, Vec<Schuld>)> {
+    let mut gruppen: Vec<((i32, u32), Vec<Schuld>)> = Vec::new();
+    for s in items {
+        let schluessel = (s.datum.year(), s.datum.month());
+        let gehoert_zur_letzten = gruppen.last().is_some_and(|(k, _)| *k == schluessel);
+        if gehoert_zur_letzten {
+            if let Some((_, liste)) = gruppen.last_mut() {
+                liste.push(s);
+            }
+        } else {
+            gruppen.push((schluessel, vec![s]));
+        }
+    }
+    gruppen
+        .into_iter()
+        .map(|((jahr, monat), liste)| {
+            (format!("{} {}", MONATE[(monat - 1) as usize], jahr), liste)
+        })
+        .collect()
 }
 
 #[component]
@@ -316,7 +345,7 @@ pub fn SchuldenSection() -> impl IntoView {
                     </form>
                 </Modal>
 
-                // Tabelle Schulden (nur Ansicht; Doppelklick auf eine Zeile öffnet die Eingabemaske)
+                // Total-Card und Tabelle Schulden (nur Ansicht; Doppelklick auf eine Zeile öffnet die Eingabemaske)
                 <div class="overflow-x-auto -mx-2 sm:mx-0">
                     <Suspense fallback=move || view! {
                         <div class="flex justify-center p-8">
@@ -327,8 +356,18 @@ pub fn SchuldenSection() -> impl IntoView {
                             schulden_resource.get().map(|res| match res {
                                 Ok(items) => {
                                     let summe: f64 = items.iter().map(|s| s.betrag).sum();
+                                    let leer = items.is_empty();
+                                    let monate = nach_monat(items);
 
                                     view! {
+                                        // Card mit dem Total aller Schulden, über der Tabelle
+                                        <div class="card bg-base-200 border border-base-300 mb-3">
+                                            <div class="card-body p-4 gap-1">
+                                                <span class="text-xs uppercase tracking-wide text-base-content/70">"Total Schulden"</span>
+                                                <span class="text-2xl font-bold text-primary font-mono">{format!("CHF {:.2}", summe)}</span>
+                                            </div>
+                                        </div>
+
                                         <table class="table table-zebra table-xs w-full">
                                             <thead>
                                                 <tr class="text-xs uppercase text-base-content/70">
@@ -339,7 +378,7 @@ pub fn SchuldenSection() -> impl IntoView {
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {if items.is_empty() {
+                                                {if leer {
                                                     view! {
                                                         <tr>
                                                             <td colspan="4" class="text-center text-base-content/50 py-6">
@@ -348,33 +387,41 @@ pub fn SchuldenSection() -> impl IntoView {
                                                         </tr>
                                                     }.into_any()
                                                 } else {
-                                                    items.into_iter().map(|s| {
-                                                        let datum_str = s.datum.format("%d.%m.%Y").to_string();
-                                                        let betrag_str = format!("CHF {:.2}", s.betrag);
-                                                        let kontakt_str = s.kontakt.clone().unwrap_or_else(|| "—".to_string());
-                                                        let zeile = s.clone();
+                                                    monate.into_iter().map(|(monat, eintraege)| {
+                                                        let monatssumme: f64 = eintraege.iter().map(|s| s.betrag).sum();
+                                                        let zeilen = eintraege.into_iter().map(|s| {
+                                                            let datum_str = s.datum.format("%d.%m.%Y").to_string();
+                                                            let betrag_str = format!("CHF {:.2}", s.betrag);
+                                                            let kontakt_str = s.kontakt.clone().unwrap_or_else(|| "—".to_string());
+                                                            let zeile = s.clone();
+
+                                                            view! {
+                                                                <tr
+                                                                    class="cursor-pointer select-none hover:bg-base-200/60"
+                                                                    title="Doppelklick zum Bearbeiten"
+                                                                    on:dblclick=move |_| bearbeiten_oeffnen(zeile.clone())
+                                                                >
+                                                                    <td class="whitespace-nowrap font-mono text-base-content/80">{datum_str}</td>
+                                                                    <td class="font-medium">{kontakt_str}</td>
+                                                                    <td>{s.grund}</td>
+                                                                    <td class="text-right whitespace-nowrap font-mono">{betrag_str}</td>
+                                                                </tr>
+                                                            }
+                                                        }).collect_view();
 
                                                         view! {
-                                                            <tr
-                                                                class="cursor-pointer select-none hover:bg-base-200/60"
-                                                                title="Doppelklick zum Bearbeiten"
-                                                                on:dblclick=move |_| bearbeiten_oeffnen(zeile.clone())
-                                                            >
-                                                                <td class="whitespace-nowrap font-mono text-base-content/80">{datum_str}</td>
-                                                                <td class="font-medium">{kontakt_str}</td>
-                                                                <td>{s.grund}</td>
-                                                                <td class="text-right whitespace-nowrap font-mono">{betrag_str}</td>
+                                                            <tr class="bg-base-200 font-semibold text-sm">
+                                                                <td colspan="4">{monat.clone()}</td>
+                                                            </tr>
+                                                            {zeilen}
+                                                            <tr class="font-bold text-xs bg-base-200/50">
+                                                                <td colspan="3">{format!("Summe {monat}")}</td>
+                                                                <td class="text-right text-primary whitespace-nowrap font-mono">{format!("CHF {:.2}", monatssumme)}</td>
                                                             </tr>
                                                         }
                                                     }).collect_view().into_any()
                                                 }}
                                             </tbody>
-                                            <tfoot>
-                                                <tr class="font-bold text-xs bg-base-200/50">
-                                                    <td colspan="3">"Total Schulden"</td>
-                                                    <td class="text-right text-primary whitespace-nowrap font-mono">{format!("CHF {:.2}", summe)}</td>
-                                                </tr>
-                                            </tfoot>
                                         </table>
                                     }.into_any()
                                 }
