@@ -75,7 +75,7 @@ fn pruefe_grund_und_betrag(grund: &str, betrag: f64) -> Result<String, ServerFnE
 
 /// Liest ein Datum im Format JJJJ-MM-TT (aus dem Formular) oder TT.MM.JJJJ.
 #[cfg(feature = "ssr")]
-fn parse_datum(text: &str) -> Result<NaiveDate, ServerFnError> {
+pub(crate) fn parse_datum(text: &str) -> Result<NaiveDate, ServerFnError> {
     let text = text.trim();
     NaiveDate::parse_from_str(text, "%Y-%m-%d")
         .or_else(|_| NaiveDate::parse_from_str(text, "%d.%m.%Y"))
@@ -84,7 +84,7 @@ fn parse_datum(text: &str) -> Result<NaiveDate, ServerFnError> {
 
 /// Holt den Namen eines Kontakts aus der Datenbank. Gehört er nicht dem Benutzer, gibt es einen Fehler.
 #[cfg(feature = "ssr")]
-async fn kontakt_name_db(
+pub(crate) async fn kontakt_name_db(
     pool: &sqlx::PgPool,
     kontakt_id: Uuid,
     benutzer_id: Uuid,
@@ -109,7 +109,7 @@ async fn kontakt_name_db(
 
 /// Holt den Namen eines Kontakts aus dem In-Memory-Speicher.
 #[cfg(feature = "ssr")]
-fn kontakt_name_memory(kontakt_id: Uuid, benutzer_id: Uuid) -> Result<String, ServerFnError> {
+pub(crate) fn kontakt_name_memory(kontakt_id: Uuid, benutzer_id: Uuid) -> Result<String, ServerFnError> {
     let guard = crate::backend::kontakte::store::KONTAKTE_MEMORY
         .lock()
         .map_err(|_| ServerFnError::new("Speicher-Lock fehlgeschlagen"))?;
