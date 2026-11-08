@@ -13,6 +13,8 @@ pub fn KontakteSection() -> impl IntoView {
     let (modal_offen, set_modal_offen) = signal(false);
     // Id des Kontakts, der gerade bearbeitet wird (None = neuer Kontakt)
     let (bearbeiten_id, set_bearbeiten_id) = signal(Option::<uuid::Uuid>::None);
+    // Zweiter Klick auf "Löschen" bestätigt das Löschen
+    let (loesch_bestaetigen, set_loesch_bestaetigen) = signal(false);
 
     let kontakte_resource = Resource::new(|| (), |_| get_kontakte());
 
@@ -37,6 +39,7 @@ pub fn KontakteSection() -> impl IntoView {
         set_nachname_input.set(String::new());
         set_error_msg.set(None);
         set_bearbeiten_id.set(None);
+        set_loesch_bestaetigen.set(false);
         set_modal_offen.set(false);
     };
 
@@ -65,18 +68,37 @@ pub fn KontakteSection() -> impl IntoView {
     });
 
     Effect::new(move |_| {
-        if let Some(Ok(())) = delete_action.value().get() {
-            kontakte_resource.refetch();
+        if let Some(res) = delete_action.value().get() {
+            match res {
+                Ok(()) => {
+                    formular_schliessen();
+                    kontakte_resource.refetch();
+                }
+                Err(e) => {
+                    set_loesch_bestaetigen.set(false);
+                    set_error_msg.set(Some(e.to_string()));
+                }
+            }
         }
     });
 
-    // Öffnet das Formular mit den Werten eines bestehenden Kontakts (Doppelklick oder ✎)
+    // Öffnet die Eingabemaske mit den Werten eines bestehenden Kontakts (Klick auf die Zeile)
     let bearbeiten_oeffnen = move |k: Kontakt| {
         set_error_msg.set(None);
+        set_loesch_bestaetigen.set(false);
         set_bearbeiten_id.set(Some(k.id));
         set_vorname_input.set(k.vorname.clone());
         set_nachname_input.set(k.nachname.clone());
         set_modal_offen.set(true);
+    };
+
+    // Erster Klick fragt nach, zweiter Klick löscht
+    let loeschen_klick = move |id: uuid::Uuid| {
+        if loesch_bestaetigen.get() {
+            delete_action.dispatch(id);
+        } else {
+            set_loesch_bestaetigen.set(true);
+        }
     };
 
     let on_submit = move |ev: leptos::ev::SubmitEvent| {
@@ -114,6 +136,7 @@ pub fn KontakteSection() -> impl IntoView {
                         on:click=move |_| {
                             set_bearbeiten_id.set(None);
                             set_error_msg.set(None);
+                            set_loesch_bestaetigen.set(false);
                             set_vorname_input.set(String::new());
                             set_nachname_input.set(String::new());
                             set_modal_offen.set(true);
@@ -123,7 +146,7 @@ pub fn KontakteSection() -> impl IntoView {
                     </button>
                 </div>
 
-                // Modalfenster zum Erfassen und Bearbeiten von Kontakten
+                // Eingabemaske zum Erfassen, Bearbeiten und Löschen von Kontakten
                 <Modal
                     offen=modal_offen
                     on_close=Callback::new(move |_| set_modal_offen.set(false))
@@ -164,6 +187,16 @@ pub fn KontakteSection() -> impl IntoView {
                         })}
 
                         <div class="modal-action mt-2">
+                            {move || bearbeiten_id.get().map(|id| view! {
+                                <button
+                                    type="button"
+                                    class="btn btn-outline btn-error mr-auto"
+                                    disabled=move || delete_action.pending().get()
+                                    on:click=move |_| loeschen_klick(id)
+                                >
+                                    {move || if loesch_bestaetigen.get() { "Wirklich löschen?" } else { "Löschen" }}
+                                </button>
+                            })}
                             <button type="button" class="btn btn-ghost" on:click=move |_| set_modal_offen.set(false)>
                                 "Abbrechen"
                             </button>
@@ -178,7 +211,7 @@ pub fn KontakteSection() -> impl IntoView {
                     </form>
                 </Modal>
 
-                // Tabelle Kontakte (Spalten: Vorname, Nachname)
+                // Tabelle Kontakte (nur Ansicht; Klick auf eine Zeile öffnet die Eingabemaske)
                 <div class="overflow-x-auto -mx-2 sm:mx-0">
                     <Suspense fallback=move || view! {
                         <div class="flex justify-center p-8">
@@ -196,48 +229,29 @@ pub fn KontakteSection() -> impl IntoView {
                                                 <tr class="text-xs uppercase text-base-content/70">
                                                     <th>"Vorname"</th>
                                                     <th>"Nachname"</th>
-                                                    <th class="w-20 text-right"></th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 {if items.is_empty() {
                                                     view! {
                                                         <tr>
-                                                            <td colspan="3" class="text-center text-base-content/50 py-6">
+                                                            <td colspan="2" class="text-center text-base-content/50 py-6">
                                                                 "Noch keine Kontakte erfasst."
                                                             </td>
                                                         </tr>
                                                     }.into_any()
                                                 } else {
                                                     items.into_iter().map(|k| {
-                                                        let id = k.id;
-                                                        let bearbeiten = k.clone();
-                                                        let zeile_dbl = k.clone();
+                                                        let zeile = k.clone();
 
                                                         view! {
-                                                            <tr class="select-none" title="Doppelklick zum Bearbeiten" on:dblclick=move |_| bearbeiten_oeffnen(zeile_dbl.clone())>
+                                                            <tr
+                                                                class="cursor-pointer select-none hover:bg-base-200/60"
+                                                                title="Zum Bearbeiten klicken"
+                                                                on:click=move |_| bearbeiten_oeffnen(zeile.clone())
+                                                            >
                                                                 <td class="font-medium">{k.vorname}</td>
                                                                 <td>{k.nachname}</td>
-                                                                <td class="text-right whitespace-nowrap">
-                                                                    <button
-                                                                        type="button"
-                                                                        class="btn btn-ghost"
-                                                                        title="Kontakt bearbeiten"
-                                                                        aria-label="Kontakt bearbeiten"
-                                                                        on:click=move |_| bearbeiten_oeffnen(bearbeiten.clone())
-                                                                    >
-                                                                        "✎"
-                                                                    </button>
-                                                                    <button
-                                                                        type="button"
-                                                                        class="btn btn-ghost text-error"
-                                                                        title="Kontakt löschen"
-                                                                        on:dblclick=move |ev| { ev.stop_propagation(); }
-                                                                        on:click=move |_| { delete_action.dispatch(id); }
-                                                                    >
-                                                                        "✕"
-                                                                    </button>
-                                                                </td>
                                                             </tr>
                                                         }
                                                     }).collect_view().into_any()
@@ -245,7 +259,7 @@ pub fn KontakteSection() -> impl IntoView {
                                             </tbody>
                                             <tfoot>
                                                 <tr class="font-bold text-xs bg-base-200/50">
-                                                    <td colspan="2">"Anzahl Kontakte"</td>
+                                                    <td>"Anzahl Kontakte"</td>
                                                     <td class="text-right text-primary">{gesamt}</td>
                                                 </tr>
                                             </tfoot>
