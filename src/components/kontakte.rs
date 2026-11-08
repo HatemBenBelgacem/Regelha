@@ -82,7 +82,7 @@ pub fn KontakteSection() -> impl IntoView {
         }
     });
 
-    // Öffnet die Eingabemaske mit den Werten eines bestehenden Kontakts (Klick auf die Zeile)
+    // Öffnet die Eingabemaske mit den Werten eines bestehenden Kontakts (Doppelklick auf die Zeile)
     let bearbeiten_oeffnen = move |k: Kontakt| {
         set_error_msg.set(None);
         set_loesch_bestaetigen.set(false);
@@ -211,7 +211,7 @@ pub fn KontakteSection() -> impl IntoView {
                     </form>
                 </Modal>
 
-                // Tabelle Kontakte (nur Ansicht; Klick auf eine Zeile öffnet die Eingabemaske)
+                // Tabelle Kontakte (nur Ansicht; Doppelklick auf eine Zeile öffnet die Eingabemaske)
                 <div class="overflow-x-auto -mx-2 sm:mx-0">
                     <Suspense fallback=move || view! {
                         <div class="flex justify-center p-8">
@@ -247,8 +247,8 @@ pub fn KontakteSection() -> impl IntoView {
                                                         view! {
                                                             <tr
                                                                 class="cursor-pointer select-none hover:bg-base-200/60"
-                                                                title="Zum Bearbeiten klicken"
-                                                                on:click=move |_| bearbeiten_oeffnen(zeile.clone())
+                                                                title="Doppelklick zum Bearbeiten"
+                                                                on:dblclick=move |_| bearbeiten_oeffnen(zeile.clone())
                                                             >
                                                                 <td class="font-medium">{k.vorname}</td>
                                                                 <td>{k.nachname}</td>

@@ -105,7 +105,7 @@ pub fn BuchungenSection() -> impl IntoView {
         }
     });
 
-    // Öffnet die Eingabemaske mit den Werten einer bestehenden Buchung (Klick auf die Zeile)
+    // Öffnet die Eingabemaske mit den Werten einer bestehenden Buchung (Doppelklick auf die Zeile)
     let bearbeiten_oeffnen = move |b: Buchung| {
         set_error_msg.set(None);
         set_loesch_bestaetigen.set(false);
@@ -386,7 +386,7 @@ pub fn BuchungenSection() -> impl IntoView {
                                                         let benutzer_name = b.benutzer;
 
                                                         view! {
-                                                            <tr class="cursor-pointer select-none hover:bg-base-200/60" title="Zum Bearbeiten klicken" on:click=move |_| bearbeiten_oeffnen(zeile.clone())>
+                                                            <tr class="cursor-pointer select-none hover:bg-base-200/60" title="Doppelklick zum Bearbeiten" on:dblclick=move |_| bearbeiten_oeffnen(zeile.clone())>
                                                                 <td class="whitespace-nowrap text-base-content/80 font-mono text-xs">
                                                                     {datum_str}
                                                                 </td>

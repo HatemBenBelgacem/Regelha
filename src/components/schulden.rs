@@ -104,7 +104,7 @@ pub fn SchuldenSection() -> impl IntoView {
         }
     });
 
-    // Öffnet die Eingabemaske mit den Werten einer bestehenden Schuld (Klick auf die Zeile)
+    // Öffnet die Eingabemaske mit den Werten einer bestehenden Schuld (Doppelklick auf die Zeile)
     let bearbeiten_oeffnen = move |s: Schuld| {
         set_error_msg.set(None);
         set_loesch_bestaetigen.set(false);
@@ -316,7 +316,7 @@ pub fn SchuldenSection() -> impl IntoView {
                     </form>
                 </Modal>
 
-                // Tabelle Schulden (nur Ansicht; Klick auf eine Zeile öffnet die Eingabemaske)
+                // Tabelle Schulden (nur Ansicht; Doppelklick auf eine Zeile öffnet die Eingabemaske)
                 <div class="overflow-x-auto -mx-2 sm:mx-0">
                     <Suspense fallback=move || view! {
                         <div class="flex justify-center p-8">
@@ -357,8 +357,8 @@ pub fn SchuldenSection() -> impl IntoView {
                                                         view! {
                                                             <tr
                                                                 class="cursor-pointer select-none hover:bg-base-200/60"
-                                                                title="Zum Bearbeiten klicken"
-                                                                on:click=move |_| bearbeiten_oeffnen(zeile.clone())
+                                                                title="Doppelklick zum Bearbeiten"
+                                                                on:dblclick=move |_| bearbeiten_oeffnen(zeile.clone())
                                                             >
                                                                 <td class="whitespace-nowrap font-mono text-base-content/80">{datum_str}</td>
                                                                 <td class="font-medium">{kontakt_str}</td>

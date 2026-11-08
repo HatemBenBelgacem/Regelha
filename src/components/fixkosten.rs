@@ -151,7 +151,7 @@ pub fn FixkostenSection() -> impl IntoView {
         }
     });
 
-    // Öffnet die Eingabemaske mit den Werten eines bestehenden Vertrags (Klick auf die Zeile)
+    // Öffnet die Eingabemaske mit den Werten eines bestehenden Vertrags (Doppelklick auf die Zeile)
     let bearbeiten_oeffnen = move |f: FixkostenEintrag| {
         set_error_msg.set(None);
         set_loesch_bestaetigen.set(false);
@@ -423,7 +423,7 @@ pub fn FixkostenSection() -> impl IntoView {
                                                         };
                                                         let zeile = f.clone();
                                                         view! {
-                                                            <tr class=format!("{zeilen_class} cursor-pointer select-none hover:bg-base-200/60") title="Zum Bearbeiten klicken" on:click=move |_| bearbeiten_oeffnen(zeile.clone())>
+                                                            <tr class=format!("{zeilen_class} cursor-pointer select-none hover:bg-base-200/60") title="Doppelklick zum Bearbeiten" on:dblclick=move |_| bearbeiten_oeffnen(zeile.clone())>
                                                                 <td class="font-medium">{f.buchungstext}</td>
                                                                 <td class="whitespace-nowrap font-mono text-xs text-base-content/80">
                                                                     {f.beginndatum.format("%d.%m.%Y").to_string()}
@@ -434,7 +434,7 @@ pub fn FixkostenSection() -> impl IntoView {
                                                                     <select
                                                                         class=status_select_class(aktueller_status)
                                                                         aria-label="Status ändern"
-                                                                        on:click=move |ev| { ev.stop_propagation(); }
+                                                                        on:dblclick=move |ev| { ev.stop_propagation(); }
                                                                         disabled=move || status_action.pending().get()
                                                                         on:change=move |ev| {
                                                                             let neu = FixkostenStatus::from_db_str(&event_target_value(&ev));

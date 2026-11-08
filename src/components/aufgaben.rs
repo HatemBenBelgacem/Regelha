@@ -100,7 +100,7 @@ pub fn AufgabenSection() -> impl IntoView {
         }
     });
 
-    // Öffnet die Eingabemaske mit den Werten einer bestehenden Aufgabe (Klick auf die Zeile)
+    // Öffnet die Eingabemaske mit den Werten einer bestehenden Aufgabe (Doppelklick auf die Zeile)
     let bearbeiten_oeffnen = move |a: Aufgabe| {
         set_error_msg.set(None);
         set_loesch_bestaetigen.set(false);
@@ -279,13 +279,13 @@ pub fn AufgabenSection() -> impl IntoView {
                                                         };
 
                                                         view! {
-                                                            <tr class="cursor-pointer select-none hover:bg-base-200/60" title="Zum Bearbeiten klicken" on:click=move |_| bearbeiten_oeffnen(zeile.clone())>
+                                                            <tr class="cursor-pointer select-none hover:bg-base-200/60" title="Doppelklick zum Bearbeiten" on:dblclick=move |_| bearbeiten_oeffnen(zeile.clone())>
                                                                 <td class="text-center">
                                                                     <input
                                                                         type="checkbox"
                                                                         class="checkbox checkbox-primary checkbox-sm"
                                                                         prop:checked=is_erledigt
-                                                                        on:click=move |ev| { ev.stop_propagation(); }
+                                                                        on:dblclick=move |ev| { ev.stop_propagation(); }
                                                                         on:change=move |ev| {
                                                                             let checked = event_target_checked(&ev);
                                                                             toggle_action.dispatch((id, checked));
