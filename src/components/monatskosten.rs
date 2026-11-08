@@ -52,7 +52,7 @@ fn fixkosten_zelle(betrag: Option<f64>) -> Zelle {
     match betrag {
         Some(b) => Zelle {
             text: betrag_text(b),
-            klasse: "text-right text-warning whitespace-nowrap",
+            klasse: "text-right text-black whitespace-nowrap",
         },
         None => Zelle {
             text: "–".to_string(),
@@ -175,7 +175,7 @@ fn monatstabelle(monate: Vec<MonatsKosten>) -> impl IntoView {
                 zellen: werte.into_iter().map(fixkosten_zelle).collect(),
                 summe: Zelle {
                     text: betrag_text(summe),
-                    klasse: "text-right font-semibold text-warning whitespace-nowrap",
+                    klasse: "text-right font-semibold text-black whitespace-nowrap",
                 },
             }
         })
@@ -208,7 +208,7 @@ fn monatstabelle(monate: Vec<MonatsKosten>) -> impl IntoView {
             "Fixkosten gesamt",
             String::new(),
             monate.iter().map(|m| m.fixkosten).collect(),
-            |_: f64| "text-right text-warning whitespace-nowrap",
+            |_: f64| "text-right text-black whitespace-nowrap",
             betrag_text,
         ),
         summen_zeile(

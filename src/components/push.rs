@@ -78,7 +78,7 @@ pub fn PushBenachrichtigungen() -> impl IntoView {
             }
             .into_any(),
             "verweigert" => view! {
-                <p class="text-xs text-warning">
+                <p class="text-xs text-black">
                     "Benachrichtigungen sind blockiert. Erlaube sie in den Einstellungen des Browsers."
                 </p>
             }
