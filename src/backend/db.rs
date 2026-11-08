@@ -338,5 +338,21 @@ async fn run_schema_init(pool: &PgPool) -> Result<(), sqlx::Error> {
     .execute(pool)
     .await?;
 
+    // Beziehung Kontakt - Schulden (1:N): Jede Schuld gehört zu einem Kontakt.
+    // Die Spalte ist nullable, damit bestehende Zeilen erhalten bleiben. Die App verlangt den Kontakt beim Speichern.
+    // ON DELETE RESTRICT: Ein Kontakt mit Schulden kann nicht gelöscht werden.
+    sqlx::query(
+        r#"
+        ALTER TABLE schulden
+        ADD COLUMN IF NOT EXISTS kontakt_id UUID REFERENCES kontakte(id) ON DELETE RESTRICT;
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
+    sqlx::query("CREATE INDEX IF NOT EXISTS schulden_kontakt_id_idx ON schulden (kontakt_id);")
+        .execute(pool)
+        .await?;
+
     Ok(())
 }

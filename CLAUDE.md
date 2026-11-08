@@ -45,7 +45,7 @@ src/
 │   ├── budget.rs      Buchungen, Fixkosten, Dashboard-Kennzahlen
 │   ├── aufgaben.rs    Aufgaben
 │   ├── kontakte.rs    Kontakte (Vorname, Nachname)
-│   ├── schulden.rs    Schulden (Datum, Grund, Betrag)
+│   ├── schulden.rs    Schulden (Datum, Grund, Betrag, Kontakt 1:N)
 │   └── chat.rs        Direkt- und Gruppenchats, Live-Abfrage, Tipp-Anzeige
 └── components/        app_layout, header, sideboard, dashboard, buchungen, fixkosten, monatskosten, schulden, aufgaben, kontakte, chat, login
 style/tailwind.css     Tailwind-Einstieg, Farben (Primär #66023C)

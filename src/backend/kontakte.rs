@@ -11,23 +11,41 @@ pub struct Kontakt {
     pub benutzer_id: Uuid,
 }
 
+/// Anzeigename für Listen und Auswahlfelder, z.B. "Max Muster" oder nur "Max".
+pub fn anzeigename(vorname: &str, nachname: &str) -> String {
+    let nachname = nachname.trim();
+    if nachname.is_empty() {
+        vorname.trim().to_string()
+    } else {
+        format!("{} {}", vorname.trim(), nachname)
+    }
+}
+
 #[cfg(feature = "ssr")]
-mod store {
+const KONTAKT_HAT_SCHULDEN: &str =
+    "Dieser Kontakt hat noch Schulden und kann nicht gelöscht werden.";
+
+#[cfg(feature = "ssr")]
+pub(crate) mod store {
     use super::*;
     use crate::backend::auth::default_admin_uuid;
     use std::sync::{LazyLock, Mutex};
+
+    /// Feste Ids der Beispielkontakte, damit die Beispiel-Schulden darauf verweisen können.
+    pub const MAX_MUSTER_ID: Uuid = Uuid::from_u128(0x6b5a_0000_0000_4000_8000_0000_0000_0001);
+    pub const SARA_BEISPIEL_ID: Uuid = Uuid::from_u128(0x6b5a_0000_0000_4000_8000_0000_0000_0002);
 
     pub static KONTAKTE_MEMORY: LazyLock<Mutex<Vec<Kontakt>>> = LazyLock::new(|| {
         let admin_id = default_admin_uuid();
         Mutex::new(vec![
             Kontakt {
-                id: Uuid::new_v4(),
+                id: MAX_MUSTER_ID,
                 vorname: "Max".to_string(),
                 nachname: "Muster".to_string(),
                 benutzer_id: admin_id,
             },
             Kontakt {
-                id: Uuid::new_v4(),
+                id: SARA_BEISPIEL_ID,
                 vorname: "Sara".to_string(),
                 nachname: "Beispiel".to_string(),
                 benutzer_id: admin_id,
@@ -198,6 +216,7 @@ pub async fn update_kontakt(
     Ok(())
 }
 
+/// Löscht einen Kontakt. Das ist nur möglich, wenn keine Schulden mehr darauf verweisen.
 #[server(
     DeleteKontakt,
     "/api",
@@ -213,6 +232,18 @@ pub async fn delete_kontakt(id: Uuid) -> Result<(), ServerFnError> {
         let current_user = require_current_user().await?;
 
         if let Some(pool) = use_context::<PgPool>() {
+            let anzahl: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM schulden WHERE kontakt_id = $1 AND benutzer_id = $2",
+            )
+            .bind(id)
+            .bind(current_user.id)
+            .fetch_one(&pool)
+            .await
+            .map_err(|e| ServerFnError::new(format!("DB-Fehler (schulden): {e}")))?;
+            if anzahl > 0 {
+                return Err(ServerFnError::new(KONTAKT_HAT_SCHULDEN));
+            }
+
             sqlx::query("DELETE FROM kontakte WHERE id = $1 AND benutzer_id = $2")
                 .bind(id)
                 .bind(current_user.id)
@@ -220,6 +251,15 @@ pub async fn delete_kontakt(id: Uuid) -> Result<(), ServerFnError> {
                 .await
                 .map_err(|e| ServerFnError::new(format!("DB-Delete fehlgeschlagen: {e}")))?;
             return Ok(());
+        }
+
+        let hat_schulden = crate::backend::schulden::store::SCHULDEN_MEMORY
+            .lock()
+            .map_err(|_| ServerFnError::new("Speicher-Lock fehlgeschlagen"))?
+            .iter()
+            .any(|s| s.kontakt_id == Some(id) && s.benutzer_id == current_user.id);
+        if hat_schulden {
+            return Err(ServerFnError::new(KONTAKT_HAT_SCHULDEN));
         }
 
         let mut guard = store::KONTAKTE_MEMORY
