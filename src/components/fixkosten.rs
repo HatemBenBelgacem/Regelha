@@ -38,6 +38,8 @@ pub fn FixkostenSection() -> impl IntoView {
     let (modal_offen, set_modal_offen) = signal(false);
     // Id des Vertrags, der gerade bearbeitet wird (None = neuer Vertrag)
     let (bearbeiten_id, set_bearbeiten_id) = signal(Option::<uuid::Uuid>::None);
+    // Zweiter Klick auf "Löschen" bestätigt das Löschen
+    let (loesch_bestaetigen, set_loesch_bestaetigen) = signal(false);
 
     let fixkosten_resource = Resource::new(|| (), |_| get_fixkosten());
 
@@ -97,6 +99,7 @@ pub fn FixkostenSection() -> impl IntoView {
         set_betrag_input.set(String::new());
         set_error_msg.set(None);
         set_bearbeiten_id.set(None);
+        set_loesch_bestaetigen.set(false);
         set_modal_offen.set(false);
     };
 
@@ -134,14 +137,24 @@ pub fn FixkostenSection() -> impl IntoView {
     });
 
     Effect::new(move |_| {
-        if let Some(Ok(())) = delete_action.value().get() {
-            fixkosten_resource.refetch();
+        if let Some(res) = delete_action.value().get() {
+            match res {
+                Ok(()) => {
+                    formular_schliessen();
+                    fixkosten_resource.refetch();
+                }
+                Err(e) => {
+                    set_loesch_bestaetigen.set(false);
+                    set_error_msg.set(Some(e.to_string()));
+                }
+            }
         }
     });
 
-    // Öffnet das Formular mit den Werten eines bestehenden Vertrags (Doppelklick oder ✎)
+    // Öffnet die Eingabemaske mit den Werten eines bestehenden Vertrags (Klick auf die Zeile)
     let bearbeiten_oeffnen = move |f: FixkostenEintrag| {
         set_error_msg.set(None);
+        set_loesch_bestaetigen.set(false);
         set_bearbeiten_id.set(Some(f.id));
         set_buchungstext.set(f.buchungstext.clone());
         set_betrag_input.set(format!("{:.2}", f.betrag));
@@ -150,6 +163,15 @@ pub fn FixkostenSection() -> impl IntoView {
         set_zahlungsperiode.set(f.zahlungsperiode);
         set_status.set(f.status);
         set_modal_offen.set(true);
+    };
+
+    // Erster Klick fragt nach, zweiter Klick löscht
+    let loeschen_klick = move |id: uuid::Uuid| {
+        if loesch_bestaetigen.get() {
+            delete_action.dispatch(id);
+        } else {
+            set_loesch_bestaetigen.set(true);
+        }
     };
 
     let on_submit = move |ev: leptos::ev::SubmitEvent| {
@@ -319,6 +341,16 @@ pub fn FixkostenSection() -> impl IntoView {
                         })}
 
                         <div class="modal-action sm:col-span-2 mt-2">
+                            {move || bearbeiten_id.get().map(|id| view! {
+                                <button
+                                    type="button"
+                                    class="btn btn-outline btn-error mr-auto"
+                                    disabled=move || delete_action.pending().get()
+                                    on:click=move |_| loeschen_klick(id)
+                                >
+                                    {move || if loesch_bestaetigen.get() { "Wirklich löschen?" } else { "Löschen" }}
+                                </button>
+                            })}
                             <button type="button" class="btn btn-ghost" on:click=move |_| set_modal_offen.set(false)>
                                 "Abbrechen"
                             </button>
@@ -367,14 +399,13 @@ pub fn FixkostenSection() -> impl IntoView {
                                                     <th>"Kündigungsfrist"</th>
                                                     <th>"Status"</th>
                                                     <th class="text-right">"Betrag (CHF)"</th>
-                                                    <th class="w-20 text-right"></th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 {if items.is_empty() {
                                                     view! {
                                                         <tr>
-                                                            <td colspan="7" class="text-center text-base-content/50 py-6">
+                                                            <td colspan="6" class="text-center text-base-content/50 py-6">
                                                                 "Noch keine Fixkosten erfasst."
                                                             </td>
                                                         </tr>
@@ -390,10 +421,9 @@ pub fn FixkostenSection() -> impl IntoView {
                                                         } else {
                                                             ""
                                                         };
-                                                        let bearbeiten = f.clone();
-                                                        let zeile_dbl = f.clone();
+                                                        let zeile = f.clone();
                                                         view! {
-                                                            <tr class=format!("{zeilen_class} select-none") title="Doppelklick zum Bearbeiten" on:dblclick=move |_| bearbeiten_oeffnen(zeile_dbl.clone())>
+                                                            <tr class=format!("{zeilen_class} cursor-pointer select-none hover:bg-base-200/60") title="Zum Bearbeiten klicken" on:click=move |_| bearbeiten_oeffnen(zeile.clone())>
                                                                 <td class="font-medium">{f.buchungstext}</td>
                                                                 <td class="whitespace-nowrap font-mono text-xs text-base-content/80">
                                                                     {f.beginndatum.format("%d.%m.%Y").to_string()}
@@ -404,7 +434,7 @@ pub fn FixkostenSection() -> impl IntoView {
                                                                     <select
                                                                         class=status_select_class(aktueller_status)
                                                                         aria-label="Status ändern"
-                                                                        on:dblclick=move |ev| { ev.stop_propagation(); }
+                                                                        on:click=move |ev| { ev.stop_propagation(); }
                                                                         disabled=move || status_action.pending().get()
                                                                         on:change=move |ev| {
                                                                             let neu = FixkostenStatus::from_db_str(&event_target_value(&ev));
@@ -428,26 +458,6 @@ pub fn FixkostenSection() -> impl IntoView {
                                                                         </div>
                                                                     })}
                                                                 </td>
-                                                                <td class="text-right whitespace-nowrap">
-                                                                    <button
-                                                                        type="button"
-                                                                        class="btn btn-ghost"
-                                                                        title="Fixkosten bearbeiten"
-                                                                        aria-label="Fixkosten bearbeiten"
-                                                                        on:click=move |_| bearbeiten_oeffnen(bearbeiten.clone())
-                                                                    >
-                                                                        "✎"
-                                                                    </button>
-                                                                    <button
-                                                                        type="button"
-                                                                        class="btn btn-ghost text-error"
-                                                                        title="Fixkosten löschen"
-                                                                        on:dblclick=move |ev| { ev.stop_propagation(); }
-                                                                        on:click=move |_| { delete_action.dispatch(id); }
-                                                                    >
-                                                                        "✕"
-                                                                    </button>
-                                                                </td>
                                                             </tr>
                                                         }
                                                     }).collect_view().into_any()
@@ -466,7 +476,6 @@ pub fn FixkostenSection() -> impl IntoView {
                                                     <td class="text-right text-black whitespace-nowrap">
                                                         {format!("CHF {:.2}", summe_pro_monat)}
                                                     </td>
-                                                    <td></td>
                                                 </tr>
                                             </tfoot>
                                         </table>
