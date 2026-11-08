@@ -22,6 +22,8 @@ pub fn BuchungenSection() -> impl IntoView {
     let (modal_offen, set_modal_offen) = signal(false);
     // Id der Buchung, die gerade bearbeitet wird (None = neue Buchung)
     let (bearbeiten_id, set_bearbeiten_id) = signal(Option::<uuid::Uuid>::None);
+    // Zweiter Klick auf "Löschen" bestätigt das Löschen
+    let (loesch_bestaetigen, set_loesch_bestaetigen) = signal(false);
 
     let buchungen_resource = Resource::new(|| (), |_| get_buchungen());
 
@@ -60,6 +62,7 @@ pub fn BuchungenSection() -> impl IntoView {
         set_betrag_input.set(String::new());
         set_error_msg.set(None);
         set_bearbeiten_id.set(None);
+        set_loesch_bestaetigen.set(false);
         set_modal_offen.set(false);
     };
 
@@ -88,20 +91,39 @@ pub fn BuchungenSection() -> impl IntoView {
     });
 
     Effect::new(move |_| {
-        if let Some(Ok(())) = delete_action.value().get() {
-            buchungen_resource.refetch();
+        if let Some(res) = delete_action.value().get() {
+            match res {
+                Ok(()) => {
+                    formular_schliessen();
+                    buchungen_resource.refetch();
+                }
+                Err(e) => {
+                    set_loesch_bestaetigen.set(false);
+                    set_error_msg.set(Some(e.to_string()));
+                }
+            }
         }
     });
 
-    // Öffnet das Formular mit den Werten einer bestehenden Buchung (Doppelklick oder ✎)
+    // Öffnet die Eingabemaske mit den Werten einer bestehenden Buchung (Doppelklick auf die Zeile)
     let bearbeiten_oeffnen = move |b: Buchung| {
         set_error_msg.set(None);
+        set_loesch_bestaetigen.set(false);
         set_bearbeiten_id.set(Some(b.id));
         set_buchungstext.set(b.buchungstext.clone());
         set_betrag_input.set(format!("{:.2}", b.betrag));
         set_art.set(b.art);
         set_datum_input.set(b.erstellt_am.format("%Y-%m-%d").to_string());
         set_modal_offen.set(true);
+    };
+
+    // Erster Klick fragt nach, zweiter Klick löscht
+    let loeschen_klick = move |id: uuid::Uuid| {
+        if loesch_bestaetigen.get() {
+            delete_action.dispatch(id);
+        } else {
+            set_loesch_bestaetigen.set(true);
+        }
     };
 
     let on_submit = move |ev: leptos::ev::SubmitEvent| {
@@ -262,6 +284,16 @@ pub fn BuchungenSection() -> impl IntoView {
                         })}
 
                         <div class="modal-action sm:col-span-2 mt-2">
+                            {move || bearbeiten_id.get().map(|id| view! {
+                                <button
+                                    type="button"
+                                    class="btn btn-outline btn-error mr-auto"
+                                    disabled=move || delete_action.pending().get()
+                                    on:click=move |_| loeschen_klick(id)
+                                >
+                                    {move || if loesch_bestaetigen.get() { "Wirklich löschen?" } else { "Löschen" }}
+                                </button>
+                            })}
                             <button type="button" class="btn btn-ghost" on:click=move |_| set_modal_offen.set(false)>
                                 "Abbrechen"
                             </button>
@@ -319,14 +351,13 @@ pub fn BuchungenSection() -> impl IntoView {
                                                     <th>"Buchungstext"</th>
                                                     <th class="w-40">"Benutzer"</th>
                                                     <th class="text-right">"Betrag (CHF)"</th>
-                                                    <th class="w-20 text-right"></th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 {if filtered.is_empty() {
                                                     view! {
                                                         <tr>
-                                                            <td colspan="5" class="text-center text-base-content/50 py-6">
+                                                            <td colspan="4" class="text-center text-base-content/50 py-6">
                                                                 "Keine Buchungen vorhanden."
                                                             </td>
                                                         </tr>
@@ -351,13 +382,11 @@ pub fn BuchungenSection() -> impl IntoView {
                                                             format!("- CHF {:.2}", b.betrag)
                                                         };
                                                         let datum_str = b.erstellt_am.format("%d.%m.%Y").to_string();
-                                                        let bearbeiten = b.clone();
-                                                        let zeile_dbl = b.clone();
+                                                        let zeile = b.clone();
                                                         let benutzer_name = b.benutzer;
-                                                        let id = b.id;
 
                                                         view! {
-                                                            <tr class="select-none" title="Doppelklick zum Bearbeiten" on:dblclick=move |_| bearbeiten_oeffnen(zeile_dbl.clone())>
+                                                            <tr class="cursor-pointer select-none hover:bg-base-200/60" title="Doppelklick zum Bearbeiten" on:dblclick=move |_| bearbeiten_oeffnen(zeile.clone())>
                                                                 <td class="whitespace-nowrap text-base-content/80 font-mono text-xs">
                                                                     {datum_str}
                                                                 </td>
@@ -373,26 +402,6 @@ pub fn BuchungenSection() -> impl IntoView {
                                                                     </span>
                                                                 </td>
                                                                 <td class=amount_class>{formatted_amount}</td>
-                                                                <td class="text-right whitespace-nowrap">
-                                                                    <button
-                                                                        type="button"
-                                                                        class="btn btn-ghost"
-                                                                        title="Buchung bearbeiten"
-                                                                        aria-label="Buchung bearbeiten"
-                                                                        on:click=move |_| bearbeiten_oeffnen(bearbeiten.clone())
-                                                                    >
-                                                                        "✎"
-                                                                    </button>
-                                                                    <button
-                                                                        type="button"
-                                                                        class="btn btn-ghost text-error"
-                                                                        title="Eintrag löschen"
-                                                                        on:dblclick=move |ev| { ev.stop_propagation(); }
-                                                                        on:click=move |_| { delete_action.dispatch(id); }
-                                                                    >
-                                                                        "✕"
-                                                                    </button>
-                                                                </td>
                                                             </tr>
                                                         }
                                                     }).collect_view().into_any()
@@ -415,7 +424,6 @@ pub fn BuchungenSection() -> impl IntoView {
                                                             format!("- CHF {:.2}", saldo.abs())
                                                         }}
                                                     </td>
-                                                    <td></td>
                                                 </tr>
                                             </tfoot>
                                         </table>

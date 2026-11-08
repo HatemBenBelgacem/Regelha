@@ -19,6 +19,8 @@ pub fn AufgabenSection() -> impl IntoView {
     let (modal_offen, set_modal_offen) = signal(false);
     // Id der Aufgabe, die gerade bearbeitet wird (None = neue Aufgabe)
     let (bearbeiten_id, set_bearbeiten_id) = signal(Option::<uuid::Uuid>::None);
+    // Zweiter Klick auf "Löschen" bestätigt das Löschen
+    let (loesch_bestaetigen, set_loesch_bestaetigen) = signal(false);
 
     let aufgaben_resource = Resource::new(|| (), |_| get_aufgaben());
 
@@ -49,6 +51,7 @@ pub fn AufgabenSection() -> impl IntoView {
         set_beschreibung.set(String::new());
         set_error_msg.set(None);
         set_bearbeiten_id.set(None);
+        set_loesch_bestaetigen.set(false);
         set_modal_offen.set(false);
     };
 
@@ -83,18 +86,37 @@ pub fn AufgabenSection() -> impl IntoView {
     });
 
     Effect::new(move |_| {
-        if let Some(Ok(())) = delete_action.value().get() {
-            aufgaben_resource.refetch();
+        if let Some(res) = delete_action.value().get() {
+            match res {
+                Ok(()) => {
+                    formular_schliessen();
+                    aufgaben_resource.refetch();
+                }
+                Err(e) => {
+                    set_loesch_bestaetigen.set(false);
+                    set_error_msg.set(Some(e.to_string()));
+                }
+            }
         }
     });
 
-    // Öffnet das Formular mit den Werten einer bestehenden Aufgabe (Doppelklick oder ✎)
+    // Öffnet die Eingabemaske mit den Werten einer bestehenden Aufgabe (Doppelklick auf die Zeile)
     let bearbeiten_oeffnen = move |a: Aufgabe| {
         set_error_msg.set(None);
+        set_loesch_bestaetigen.set(false);
         set_bearbeiten_id.set(Some(a.id));
         set_beschreibung.set(a.beschreibung.clone());
         set_datum_input.set(a.datum.format("%Y-%m-%d").to_string());
         set_modal_offen.set(true);
+    };
+
+    // Erster Klick fragt nach, zweiter Klick löscht
+    let loeschen_klick = move |id: uuid::Uuid| {
+        if loesch_bestaetigen.get() {
+            delete_action.dispatch(id);
+        } else {
+            set_loesch_bestaetigen.set(true);
+        }
     };
 
     let on_submit = move |ev: leptos::ev::SubmitEvent| {
@@ -181,6 +203,16 @@ pub fn AufgabenSection() -> impl IntoView {
                         })}
 
                         <div class="modal-action mt-2">
+                            {move || bearbeiten_id.get().map(|id| view! {
+                                <button
+                                    type="button"
+                                    class="btn btn-outline btn-error mr-auto"
+                                    disabled=move || delete_action.pending().get()
+                                    on:click=move |_| loeschen_klick(id)
+                                >
+                                    {move || if loesch_bestaetigen.get() { "Wirklich löschen?" } else { "Löschen" }}
+                                </button>
+                            })}
                             <button type="button" class="btn btn-ghost" on:click=move |_| set_modal_offen.set(false)>
                                 "Abbrechen"
                             </button>
@@ -216,14 +248,13 @@ pub fn AufgabenSection() -> impl IntoView {
                                                     <th class="w-32">"Datum"</th>
                                                     <th>"Beschreibung"</th>
                                                     <th class="w-40">"Benutzer"</th>
-                                                    <th class="w-20 text-right"></th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 {if items.is_empty() {
                                                     view! {
                                                         <tr>
-                                                            <td colspan="5" class="text-center text-base-content/50 py-6">
+                                                            <td colspan="4" class="text-center text-base-content/50 py-6">
                                                                 "Noch keine Aufgaben erfasst."
                                                             </td>
                                                         </tr>
@@ -233,8 +264,7 @@ pub fn AufgabenSection() -> impl IntoView {
                                                         let datum_str = a.datum.format("%d.%m.%Y").to_string();
                                                         let id = a.id;
                                                         let is_erledigt = a.erledigt;
-                                                        let bearbeiten = a.clone();
-                                                        let zeile_dbl = a.clone();
+                                                        let zeile = a.clone();
 
                                                         let datum_class = if is_erledigt {
                                                             "whitespace-nowrap font-mono text-xs line-through text-base-content/40"
@@ -249,7 +279,7 @@ pub fn AufgabenSection() -> impl IntoView {
                                                         };
 
                                                         view! {
-                                                            <tr class="select-none" title="Doppelklick zum Bearbeiten" on:dblclick=move |_| bearbeiten_oeffnen(zeile_dbl.clone())>
+                                                            <tr class="cursor-pointer select-none hover:bg-base-200/60" title="Doppelklick zum Bearbeiten" on:dblclick=move |_| bearbeiten_oeffnen(zeile.clone())>
                                                                 <td class="text-center">
                                                                     <input
                                                                         type="checkbox"
@@ -269,26 +299,6 @@ pub fn AufgabenSection() -> impl IntoView {
                                                                         {a.benutzer}
                                                                     </span>
                                                                 </td>
-                                                                <td class="text-right whitespace-nowrap">
-                                                                    <button
-                                                                        type="button"
-                                                                        class="btn btn-ghost"
-                                                                        title="Aufgabe bearbeiten"
-                                                                        aria-label="Aufgabe bearbeiten"
-                                                                        on:click=move |_| bearbeiten_oeffnen(bearbeiten.clone())
-                                                                    >
-                                                                        "✎"
-                                                                    </button>
-                                                                    <button
-                                                                        type="button"
-                                                                        class="btn btn-ghost text-error"
-                                                                        title="Aufgabe löschen"
-                                                                        on:dblclick=move |ev| { ev.stop_propagation(); }
-                                                                        on:click=move |_| { delete_action.dispatch(id); }
-                                                                    >
-                                                                        "✕"
-                                                                    </button>
-                                                                </td>
                                                             </tr>
                                                         }
                                                     }).collect_view().into_any()
@@ -300,7 +310,6 @@ pub fn AufgabenSection() -> impl IntoView {
                                                     <td class="text-primary">
                                                         {format!("{offene} offen / {gesamt} gesamt")}
                                                     </td>
-                                                    <td></td>
                                                 </tr>
                                             </tfoot>
                                         </table>
