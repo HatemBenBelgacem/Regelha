@@ -1,7 +1,7 @@
 # CLAUDE.md – Regelha
 
 Persönliche Haushalts- und Organisations-App: Budget-Dashboard, Buchungen, Fixkosten,
-Aufgaben und Chat. Fullstack in Rust mit **Leptos 0.8** (SSR + Hydration), **Axum 0.8**,
+Schulden, Aufgaben, Kontakte und Chat. Fullstack in Rust mit **Leptos 0.8** (SSR + Hydration), **Axum 0.8**,
 **sqlx 0.8 / PostgreSQL**, **Tailwind CSS v4 + DaisyUI v5**. Deployment auf Railway.
 
 ## Sprache und Stil
@@ -37,15 +37,17 @@ npm install                                                             # Tailwi
 src/
 ├── main.rs            Axum-Server, PORT von Railway, PgPool als Leptos-Kontext
 ├── lib.rs             Module, hydrate()
-├── app.rs             shell(), Routen: / · /buchungen · /fixkosten · /monatskosten · /aufgaben · /chat
+├── app.rs             shell(), Routen: / · /buchungen · /fixkosten · /monatskosten · /schulden · /aufgaben · /kontakte · /chat
 ├── backend/
 │   ├── mod.rs         register_server_functions() – jede neue #[server]-Funktion hier eintragen!
 │   ├── db.rs          Pool, Datenbank anlegen, Tabellen erstellen          [ssr]
 │   ├── auth.rs        Anmeldung, Sitzung, Passwort-Hash
 │   ├── budget.rs      Buchungen, Fixkosten, Dashboard-Kennzahlen
 │   ├── aufgaben.rs    Aufgaben
+│   ├── kontakte.rs    Kontakte (Vorname, Nachname)
+│   ├── schulden.rs    Schulden (Datum, Grund, Betrag)
 │   └── chat.rs        Direkt- und Gruppenchats, Live-Abfrage, Tipp-Anzeige
-└── components/        app_layout, header, sideboard, dashboard, buchungen, fixkosten, monatskosten, aufgaben, chat, login
+└── components/        app_layout, header, sideboard, dashboard, buchungen, fixkosten, monatskosten, schulden, aufgaben, kontakte, chat, login
 style/tailwind.css     Tailwind-Einstieg, Farben (Primär #66023C)
 ```
 

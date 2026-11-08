@@ -8,7 +8,8 @@ use leptos_router::{
 use crate::components::{
     app_layout::AppLayout, aufgaben::AufgabenSection, buchungen::BuchungenSection,
     chat::ChatSection, dashboard::BudgetDashboard, fixkosten::FixkostenSection,
-    monatskosten::MonatskostenSection,
+    monatskosten::MonatskostenSection, kontakte::KontakteSection,
+    schulden::SchuldenSection,
 };
 
 /// Meldet den Service Worker an (für die Installation als App). Läuft nach dem Laden der Seite.
@@ -56,7 +57,9 @@ pub fn App() -> impl IntoView {
                     <Route path=StaticSegment("buchungen") view=BuchungenSection/>
                     <Route path=StaticSegment("fixkosten") view=FixkostenSection/>
                     <Route path=StaticSegment("monatskosten") view=MonatskostenSection/>
+                    <Route path=StaticSegment("schulden") view=SchuldenSection/>
                     <Route path=StaticSegment("aufgaben") view=AufgabenSection/>
+                    <Route path=StaticSegment("kontakte") view=KontakteSection/>
                     <Route path=StaticSegment("chat") view=ChatSection/>
                 </ParentRoute>
             </Routes>
