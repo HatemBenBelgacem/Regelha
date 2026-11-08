@@ -1,67 +1,60 @@
 #[cfg(feature = "ssr")]
 use chrono::Local;
-use chrono::{NaiveDate, NaiveTime};
+use chrono::{NaiveDate, NaiveDateTime};
 use leptos::prelude::*;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// Ein Fasten an einem Tag: Datum, Beginn und Ende (Uhrzeit).
-/// Liegt das Ende vor dem Beginn, dauert das Fasten über Mitternacht.
+/// Ein Fasten mit Datum, Beginn und Ende. Beginn und Ende sind Zeitpunkte (Datum und Uhrzeit).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Fasten {
     pub id: Uuid,
     pub datum: NaiveDate,
-    pub beginn: NaiveTime,
-    pub ende: NaiveTime,
+    pub beginn: NaiveDateTime,
+    pub ende: NaiveDateTime,
     pub benutzer_id: Uuid,
 }
 
 /// Dauer des Fastens in Minuten (berechnet, nicht gespeichert).
-/// Liegt das Ende vor dem Beginn, läuft das Fasten über Mitternacht.
-pub fn dauer_minuten(beginn: NaiveTime, ende: NaiveTime) -> i64 {
-    let differenz = ende.signed_duration_since(beginn).num_minutes();
-    if differenz <= 0 {
-        differenz + 24 * 60
-    } else {
-        differenz
-    }
+pub fn dauer_minuten(beginn: NaiveDateTime, ende: NaiveDateTime) -> i64 {
+    ende.signed_duration_since(beginn).num_minutes()
 }
 
 #[cfg(feature = "ssr")]
 pub(crate) mod store {
     use super::*;
     use crate::backend::auth::default_admin_uuid;
+    use chrono::NaiveTime;
     use std::sync::{LazyLock, Mutex};
 
     pub static FASTEN_MEMORY: LazyLock<Mutex<Vec<Fasten>>> = LazyLock::new(|| {
         let today = Local::now().date_naive();
+        let morgen = today.succ_opt().expect("gültiges Beispieldatum");
         let admin_id = default_admin_uuid();
         Mutex::new(vec![Fasten {
             id: Uuid::new_v4(),
             datum: today,
-            beginn: NaiveTime::from_hms_opt(20, 0, 0).expect("gültige Beispielzeit"),
-            ende: NaiveTime::from_hms_opt(12, 0, 0).expect("gültige Beispielzeit"),
+            beginn: today.and_time(NaiveTime::from_hms_opt(20, 0, 0).expect("gültige Beispielzeit")),
+            ende: morgen.and_time(NaiveTime::from_hms_opt(12, 0, 0).expect("gültige Beispielzeit")),
             benutzer_id: admin_id,
         }])
     });
 }
 
-/// Liest eine Uhrzeit im Format HH:MM (aus dem Formular) oder HH:MM:SS.
+/// Liest einen Zeitpunkt im Format JJJJ-MM-TTTHH:MM (aus dem Formular) oder mit Sekunden.
 #[cfg(feature = "ssr")]
-fn parse_zeit(text: &str) -> Result<NaiveTime, ServerFnError> {
+fn parse_zeitpunkt(text: &str) -> Result<NaiveDateTime, ServerFnError> {
     let text = text.trim();
-    NaiveTime::parse_from_str(text, "%H:%M")
-        .or_else(|_| NaiveTime::parse_from_str(text, "%H:%M:%S"))
-        .map_err(|_| ServerFnError::new("Bitte eine gültige Uhrzeit eingeben."))
+    NaiveDateTime::parse_from_str(text, "%Y-%m-%dT%H:%M")
+        .or_else(|_| NaiveDateTime::parse_from_str(text, "%Y-%m-%dT%H:%M:%S"))
+        .map_err(|_| ServerFnError::new("Bitte einen gültigen Zeitpunkt eingeben."))
 }
 
-/// Beginn und Ende dürfen nicht gleich sein, sonst ist die Dauer unklar.
+/// Das Ende muss nach dem Beginn liegen.
 #[cfg(feature = "ssr")]
-fn pruefe_zeiten(beginn: NaiveTime, ende: NaiveTime) -> Result<(), ServerFnError> {
-    if beginn == ende {
-        return Err(ServerFnError::new(
-            "Beginn und Ende dürfen nicht gleich sein.",
-        ));
+fn pruefe_zeitraum(beginn: NaiveDateTime, ende: NaiveDateTime) -> Result<(), ServerFnError> {
+    if ende <= beginn {
+        return Err(ServerFnError::new("Das Ende muss nach dem Beginn liegen."));
     }
     Ok(())
 }
@@ -138,9 +131,9 @@ pub async fn add_fasten(
         use sqlx::PgPool;
 
         let datum = parse_datum(&datum)?;
-        let beginn = parse_zeit(&beginn)?;
-        let ende = parse_zeit(&ende)?;
-        pruefe_zeiten(beginn, ende)?;
+        let beginn = parse_zeitpunkt(&beginn)?;
+        let ende = parse_zeitpunkt(&ende)?;
+        pruefe_zeitraum(beginn, ende)?;
         let current_user = require_current_user().await?;
 
         let neues_fasten = Fasten {
@@ -200,9 +193,9 @@ pub async fn update_fasten(
         use sqlx::PgPool;
 
         let datum = parse_datum(&datum)?;
-        let beginn = parse_zeit(&beginn)?;
-        let ende = parse_zeit(&ende)?;
-        pruefe_zeiten(beginn, ende)?;
+        let beginn = parse_zeitpunkt(&beginn)?;
+        let ende = parse_zeitpunkt(&ende)?;
+        pruefe_zeitraum(beginn, ende)?;
         let current_user = require_current_user().await?;
 
         if let Some(pool) = use_context::<PgPool>() {
