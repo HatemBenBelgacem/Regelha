@@ -101,11 +101,11 @@ pub fn BudgetDashboard() -> impl IntoView {
                                                     <span class="text-xs font-semibold uppercase tracking-wider text-base-content/60">
                                                         "Prognose Monatsende"
                                                     </span>
-                                                    <span class="badge badge-warning badge-outline badge-sm">
+                                                    <span class="badge badge-warning badge-outline badge-sm text-black">
                                                         {format!("{} Tage", k.tage_im_monat)}
                                                     </span>
                                                 </div>
-                                                <div class="text-2xl sm:text-3xl font-extrabold text-warning mt-2">
+                                                <div class="text-2xl sm:text-3xl font-extrabold text-black mt-2">
                                                     {format!("CHF {:.2}", k.voraussichtliche_ausgaben_monatsende)}
                                                 </div>
                                                 <p class="text-xs text-base-content/60 mt-1">
@@ -139,7 +139,7 @@ pub fn BudgetDashboard() -> impl IntoView {
                                                     </div>
                                                     <div class="p-3 rounded-box bg-base-200/70">
                                                         <div class="text-xs text-base-content/60">"Prognose inkl. Fixkosten"</div>
-                                                        <div class="text-lg font-bold text-warning">
+                                                        <div class="text-lg font-bold text-black">
                                                             {format!("CHF {:.2}", k.voraussichtliche_gesamtausgaben_inkl_fixkosten)}
                                                         </div>
                                                     </div>
@@ -159,7 +159,7 @@ pub fn BudgetDashboard() -> impl IntoView {
                                                     </div>
                                                     <div class="p-3 rounded-box bg-base-200/70">
                                                         <div class="text-xs text-base-content/60">"Fixkosten (Monat)"</div>
-                                                        <div class="text-lg sm:text-xl font-bold text-warning">
+                                                        <div class="text-lg sm:text-xl font-bold text-black">
                                                             {format!("- CHF {:.2}", k.summe_fixkosten)}
                                                         </div>
                                                     </div>

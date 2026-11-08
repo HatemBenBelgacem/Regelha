@@ -14,7 +14,7 @@ const KUENDIGUNGSFRISTEN: [i32; 7] = [0, 1, 2, 3, 6, 12, 24];
 fn status_select_class(status: FixkostenStatus) -> &'static str {
     match status {
         FixkostenStatus::Aktiv => "select select-xs select-bordered text-success font-medium",
-        FixkostenStatus::Gekuendigt => "select select-xs select-bordered text-warning font-medium",
+        FixkostenStatus::Gekuendigt => "select select-xs select-bordered text-black font-medium",
         FixkostenStatus::Beendet => "select select-xs select-bordered text-base-content/50 font-medium",
     }
 }
@@ -419,7 +419,7 @@ pub fn FixkostenSection() -> impl IntoView {
                                                                     </select>
                                                                 </td>
                                                                 <td class="text-right whitespace-nowrap">
-                                                                    <div class="font-semibold text-warning">
+                                                                    <div class="font-semibold text-black">
                                                                         {format!("CHF {:.2}", f.betrag)}
                                                                     </div>
                                                                     {(!ist_monatlich).then(|| view! {
@@ -463,7 +463,7 @@ pub fn FixkostenSection() -> impl IntoView {
                                                             </span>
                                                         </div>
                                                     </td>
-                                                    <td class="text-right text-warning whitespace-nowrap">
+                                                    <td class="text-right text-black whitespace-nowrap">
                                                         {format!("CHF {:.2}", summe_pro_monat)}
                                                     </td>
                                                     <td></td>
