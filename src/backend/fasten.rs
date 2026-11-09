@@ -1,15 +1,15 @@
 #[cfg(feature = "ssr")]
 use chrono::Local;
-use chrono::{NaiveDate, NaiveDateTime};
+use chrono::NaiveDateTime;
 use leptos::prelude::*;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// Ein Fasten mit Datum, Beginn und Ende. Beginn und Ende sind Zeitpunkte (Datum und Uhrzeit).
+/// Ein Fasten. Beginn und Ende sind Zeitpunkte (Datum und Uhrzeit).
+/// Das Datum steckt im Beginn, deshalb gibt es kein eigenes Datumsfeld mehr.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Fasten {
     pub id: Uuid,
-    pub datum: NaiveDate,
     pub beginn: NaiveDateTime,
     pub ende: NaiveDateTime,
     pub benutzer_id: Uuid,
@@ -33,7 +33,6 @@ pub(crate) mod store {
         let admin_id = default_admin_uuid();
         Mutex::new(vec![Fasten {
             id: Uuid::new_v4(),
-            datum: today,
             beginn: today.and_time(NaiveTime::from_hms_opt(20, 0, 0).expect("gültige Beispielzeit")),
             ende: morgen.and_time(NaiveTime::from_hms_opt(12, 0, 0).expect("gültige Beispielzeit")),
             benutzer_id: admin_id,
@@ -76,10 +75,10 @@ pub async fn get_fasten() -> Result<Vec<Fasten>, ServerFnError> {
         if let Some(pool) = use_context::<PgPool>() {
             let rows = sqlx::query(
                 r#"
-                SELECT id, datum, beginn, ende, benutzer_id
+                SELECT id, beginn, ende, benutzer_id
                 FROM fasten
                 WHERE benutzer_id = $1
-                ORDER BY datum DESC, beginn DESC
+                ORDER BY beginn DESC
                 "#,
             )
             .bind(current_user.id)
@@ -91,7 +90,6 @@ pub async fn get_fasten() -> Result<Vec<Fasten>, ServerFnError> {
                 .into_iter()
                 .map(|row| Fasten {
                     id: row.get("id"),
-                    datum: row.get("datum"),
                     beginn: row.get("beginn"),
                     ende: row.get("ende"),
                     benutzer_id: row.get("benutzer_id"),
@@ -108,7 +106,7 @@ pub async fn get_fasten() -> Result<Vec<Fasten>, ServerFnError> {
             .filter(|f| f.benutzer_id == current_user.id)
             .cloned()
             .collect();
-        liste.sort_by(|a, b| b.datum.cmp(&a.datum).then_with(|| b.beginn.cmp(&a.beginn)));
+        liste.sort_by_key(|f| std::cmp::Reverse(f.beginn));
         Ok(liste)
     }
 }
@@ -119,18 +117,12 @@ pub async fn get_fasten() -> Result<Vec<Fasten>, ServerFnError> {
     input = leptos::server_fn::codec::Json,
     endpoint = "add_fasten"
 )]
-pub async fn add_fasten(
-    datum: String,
-    beginn: String,
-    ende: String,
-) -> Result<Fasten, ServerFnError> {
+pub async fn add_fasten(beginn: String, ende: String) -> Result<Fasten, ServerFnError> {
     #[cfg(feature = "ssr")]
     {
         use crate::backend::auth::require_current_user;
-        use crate::backend::schulden::parse_datum;
         use sqlx::PgPool;
 
-        let datum = parse_datum(&datum)?;
         let beginn = parse_zeitpunkt(&beginn)?;
         let ende = parse_zeitpunkt(&ende)?;
         pruefe_zeitraum(beginn, ende)?;
@@ -138,7 +130,6 @@ pub async fn add_fasten(
 
         let neues_fasten = Fasten {
             id: Uuid::new_v4(),
-            datum,
             beginn,
             ende,
             benutzer_id: current_user.id,
@@ -147,12 +138,11 @@ pub async fn add_fasten(
         if let Some(pool) = use_context::<PgPool>() {
             sqlx::query(
                 r#"
-                INSERT INTO fasten (id, datum, beginn, ende, benutzer_id)
-                VALUES ($1, $2, $3, $4, $5)
+                INSERT INTO fasten (id, beginn, ende, benutzer_id)
+                VALUES ($1, $2, $3, $4)
                 "#,
             )
             .bind(neues_fasten.id)
-            .bind(neues_fasten.datum)
             .bind(neues_fasten.beginn)
             .bind(neues_fasten.ende)
             .bind(neues_fasten.benutzer_id)
@@ -180,36 +170,26 @@ pub async fn add_fasten(
     input = leptos::server_fn::codec::Json,
     endpoint = "update_fasten"
 )]
-pub async fn update_fasten(
-    id: Uuid,
-    datum: String,
-    beginn: String,
-    ende: String,
-) -> Result<(), ServerFnError> {
+pub async fn update_fasten(id: Uuid, beginn: String, ende: String) -> Result<(), ServerFnError> {
     #[cfg(feature = "ssr")]
     {
         use crate::backend::auth::require_current_user;
-        use crate::backend::schulden::parse_datum;
         use sqlx::PgPool;
 
-        let datum = parse_datum(&datum)?;
         let beginn = parse_zeitpunkt(&beginn)?;
         let ende = parse_zeitpunkt(&ende)?;
         pruefe_zeitraum(beginn, ende)?;
         let current_user = require_current_user().await?;
 
         if let Some(pool) = use_context::<PgPool>() {
-            sqlx::query(
-                "UPDATE fasten SET datum = $1, beginn = $2, ende = $3 WHERE id = $4 AND benutzer_id = $5",
-            )
-            .bind(datum)
-            .bind(beginn)
-            .bind(ende)
-            .bind(id)
-            .bind(current_user.id)
-            .execute(&pool)
-            .await
-            .map_err(|e| ServerFnError::new(format!("DB-Update fehlgeschlagen: {e}")))?;
+            sqlx::query("UPDATE fasten SET beginn = $1, ende = $2 WHERE id = $3 AND benutzer_id = $4")
+                .bind(beginn)
+                .bind(ende)
+                .bind(id)
+                .bind(current_user.id)
+                .execute(&pool)
+                .await
+                .map_err(|e| ServerFnError::new(format!("DB-Update fehlgeschlagen: {e}")))?;
             return Ok(());
         }
 
@@ -220,7 +200,6 @@ pub async fn update_fasten(
             .iter_mut()
             .find(|f| f.id == id && f.benutzer_id == current_user.id)
         {
-            f.datum = datum;
             f.beginn = beginn;
             f.ende = ende;
         }
