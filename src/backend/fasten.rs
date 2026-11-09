@@ -7,11 +7,12 @@ use uuid::Uuid;
 
 /// Ein Fasten. Beginn und Ende sind Zeitpunkte (Datum und Uhrzeit).
 /// Das Datum steckt im Beginn, deshalb gibt es kein eigenes Datumsfeld mehr.
+/// Ohne Ende (`None`) läuft das Fasten noch.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Fasten {
     pub id: Uuid,
     pub beginn: NaiveDateTime,
-    pub ende: NaiveDateTime,
+    pub ende: Option<NaiveDateTime>,
     pub benutzer_id: Uuid,
 }
 
@@ -34,7 +35,7 @@ pub(crate) mod store {
         Mutex::new(vec![Fasten {
             id: Uuid::new_v4(),
             beginn: today.and_time(NaiveTime::from_hms_opt(20, 0, 0).expect("gültige Beispielzeit")),
-            ende: morgen.and_time(NaiveTime::from_hms_opt(12, 0, 0).expect("gültige Beispielzeit")),
+            ende: Some(morgen.and_time(NaiveTime::from_hms_opt(12, 0, 0).expect("gültige Beispielzeit"))),
             benutzer_id: admin_id,
         }])
     });
@@ -49,10 +50,20 @@ fn parse_zeitpunkt(text: &str) -> Result<NaiveDateTime, ServerFnError> {
         .map_err(|_| ServerFnError::new("Bitte einen gültigen Zeitpunkt eingeben."))
 }
 
-/// Das Ende muss nach dem Beginn liegen.
+/// Liest das Ende. Ein leeres Feld heisst: das Fasten läuft noch.
 #[cfg(feature = "ssr")]
-fn pruefe_zeitraum(beginn: NaiveDateTime, ende: NaiveDateTime) -> Result<(), ServerFnError> {
-    if ende <= beginn {
+fn parse_ende(text: &str) -> Result<Option<NaiveDateTime>, ServerFnError> {
+    if text.trim().is_empty() {
+        Ok(None)
+    } else {
+        parse_zeitpunkt(text).map(Some)
+    }
+}
+
+/// Das Ende muss nach dem Beginn liegen (falls es ein Ende gibt).
+#[cfg(feature = "ssr")]
+fn pruefe_zeitraum(beginn: NaiveDateTime, ende: Option<NaiveDateTime>) -> Result<(), ServerFnError> {
+    if ende.is_some_and(|ende| ende <= beginn) {
         return Err(ServerFnError::new("Das Ende muss nach dem Beginn liegen."));
     }
     Ok(())
@@ -124,7 +135,7 @@ pub async fn add_fasten(beginn: String, ende: String) -> Result<Fasten, ServerFn
         use sqlx::PgPool;
 
         let beginn = parse_zeitpunkt(&beginn)?;
-        let ende = parse_zeitpunkt(&ende)?;
+        let ende = parse_ende(&ende)?;
         pruefe_zeitraum(beginn, ende)?;
         let current_user = require_current_user().await?;
 
@@ -177,7 +188,7 @@ pub async fn update_fasten(id: Uuid, beginn: String, ende: String) -> Result<(),
         use sqlx::PgPool;
 
         let beginn = parse_zeitpunkt(&beginn)?;
-        let ende = parse_zeitpunkt(&ende)?;
+        let ende = parse_ende(&ende)?;
         pruefe_zeitraum(beginn, ende)?;
         let current_user = require_current_user().await?;
 

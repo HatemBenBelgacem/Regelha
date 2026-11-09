@@ -1,3 +1,4 @@
+use chrono::NaiveDateTime;
 use leptos::prelude::*;
 
 use crate::backend::fasten::{add_fasten, delete_fasten, dauer_minuten, get_fasten, update_fasten, Fasten};
@@ -6,6 +7,20 @@ use crate::components::modal::Modal;
 /// Dauer als Text, z.B. "16 h 00 min" oder "30 h 15 min".
 fn dauer_text(minuten: i64) -> String {
     format!("{} h {:02} min", minuten / 60, minuten % 60)
+}
+
+/// Laufende Dauer mit Sekunden, z.B. "5 h 03 min 12 s".
+fn laufend_text(sekunden: i64) -> String {
+    let sekunden = sekunden.max(0);
+    format!("{} h {:02} min {:02} s", sekunden / 3600, sekunden % 3600 / 60, sekunden % 60)
+}
+
+/// Aktuelle Ortszeit des Browsers (Beginn und Ende werden ebenfalls als Ortszeit erfasst).
+#[cfg(feature = "hydrate")]
+fn browser_jetzt() -> Option<NaiveDateTime> {
+    let d = js_sys::Date::new_0();
+    chrono::NaiveDate::from_ymd_opt(d.get_full_year() as i32, d.get_month() + 1, d.get_date())?
+        .and_hms_opt(d.get_hours(), d.get_minutes(), d.get_seconds())
 }
 
 #[component]
@@ -21,6 +36,25 @@ pub fn FastenSection() -> impl IntoView {
     let (loesch_bestaetigen, set_loesch_bestaetigen) = signal(false);
 
     let fasten_resource = Resource::new(|| (), |_| get_fasten());
+
+    // Aktuelle Zeit für laufende Fasten. Der Ticker läuft nur im Browser (kein Datenverkehr):
+    // Auf dem Server und beim ersten Zeichnen ist der Wert None, damit die Hydration übereinstimmt.
+    let (jetzt, set_jetzt) = signal(Option::<NaiveDateTime>::None);
+    #[cfg(feature = "hydrate")]
+    Effect::new(move |_| {
+        set_jetzt.set(browser_jetzt());
+        let handle = set_interval_with_handle(
+            move || set_jetzt.set(browser_jetzt()),
+            std::time::Duration::from_secs(1),
+        );
+        on_cleanup(move || {
+            if let Ok(h) = handle {
+                h.clear();
+            }
+        });
+    });
+    #[cfg(not(feature = "hydrate"))]
+    let _ = set_jetzt;
 
     let create_action = Action::new(move |(beginn, ende): &(String, String)| {
         let (beginn, ende) = (beginn.clone(), ende.clone());
@@ -92,8 +126,19 @@ pub fn FastenSection() -> impl IntoView {
         set_loesch_bestaetigen.set(false);
         set_bearbeiten_id.set(Some(f.id));
         set_beginn_input.set(f.beginn.format("%Y-%m-%dT%H:%M").to_string());
-        set_ende_input.set(f.ende.format("%Y-%m-%dT%H:%M").to_string());
+        set_ende_input.set(f.ende.map(|e| e.format("%Y-%m-%dT%H:%M").to_string()).unwrap_or_default());
         set_modal_offen.set(true);
+    };
+
+    // Laufendes Fasten jetzt beenden (Ende = aktuelle Zeit im Browser)
+    let beenden_klick = move |f: Fasten| {
+        if let Some(n) = jetzt.get_untracked().filter(|n| *n > f.beginn) {
+            update_action.dispatch((
+                f.id,
+                f.beginn.format("%Y-%m-%dT%H:%M:%S").to_string(),
+                n.format("%Y-%m-%dT%H:%M:%S").to_string(),
+            ));
+        }
     };
 
     // Erster Klick fragt nach, zweiter Klick löscht
@@ -109,12 +154,13 @@ pub fn FastenSection() -> impl IntoView {
         ev.prevent_default();
         let beginn = beginn_input.get();
         let ende = ende_input.get();
-        if beginn.trim().is_empty() || ende.trim().is_empty() {
-            set_error_msg.set(Some("Bitte Beginn und Ende eingeben.".to_string()));
+        if beginn.trim().is_empty() {
+            set_error_msg.set(Some("Bitte einen Beginn eingeben.".to_string()));
             return;
         }
-        // Die Zeitpunkte haben alle das Format JJJJ-MM-TTTHH:MM, deshalb stimmt der Textvergleich mit der Reihenfolge überein
-        if ende <= beginn {
+        // Die Zeitpunkte haben alle das Format JJJJ-MM-TTTHH:MM, deshalb stimmt der Textvergleich mit der Reihenfolge überein.
+        // Ein leeres Ende heisst: das Fasten läuft noch.
+        if !ende.trim().is_empty() && ende <= beginn {
             set_error_msg.set(Some("Das Ende muss nach dem Beginn liegen.".to_string()));
             return;
         }
@@ -136,7 +182,7 @@ pub fn FastenSection() -> impl IntoView {
                     <div>
                         <h2 class="card-title text-lg sm:text-xl">"Fasten"</h2>
                         <p class="text-xs sm:text-sm text-base-content/70">
-                            "Erfassung deiner Fastenzeiten mit Beginn und Ende. Die Dauer wird berechnet."
+                            "Erfassung deiner Fastenzeiten mit Beginn und Ende. Die Dauer wird berechnet und läuft live mit, solange kein Ende gesetzt ist."
                         </p>
                     </div>
                     <button
@@ -177,19 +223,18 @@ pub fn FastenSection() -> impl IntoView {
 
                         <div>
                             <label class="label py-1">
-                                <span class="label-text font-medium text-sm">"Ende"</span>
+                                <span class="label-text font-medium text-sm">"Ende (optional)"</span>
                             </label>
                             <input
                                 type="datetime-local"
                                 class="input input-bordered w-full"
                                 prop:value=move || ende_input.get()
                                 on:input=move |ev| set_ende_input.set(event_target_value(&ev))
-                                required
                             />
                         </div>
 
                         <p class="text-xs text-base-content/60 sm:col-span-2">
-                            "Das Ende muss nach dem Beginn liegen."
+                            "Ende leer lassen, wenn das Fasten noch läuft. Das Ende muss nach dem Beginn liegen."
                         </p>
 
                         {move || error_msg.get().map(|msg| view! {
@@ -264,9 +309,41 @@ pub fn FastenSection() -> impl IntoView {
                                                 } else {
                                                     items.into_iter().map(|f| {
                                                         let beginn_str = f.beginn.format("%d.%m.%Y %H:%M").to_string();
-                                                        let ende_str = f.ende.format("%d.%m.%Y %H:%M").to_string();
-                                                        let dauer = dauer_text(dauer_minuten(f.beginn, f.ende));
                                                         let zeile = f.clone();
+                                                        let zum_beenden = f.clone();
+                                                        let beginn = f.beginn;
+
+                                                        // Ende-Spalte: festes Datum oder "läuft" mit Knopf zum Beenden
+                                                        let ende_zelle = match f.ende {
+                                                            Some(ende) => view! { <span>{ende.format("%d.%m.%Y %H:%M").to_string()}</span> }.into_any(),
+                                                            None => view! {
+                                                                <span class="inline-flex items-center gap-2">
+                                                                    <span class="badge badge-success badge-sm text-white">"läuft"</span>
+                                                                    <button
+                                                                        type="button"
+                                                                        class="btn btn-xs btn-outline btn-primary"
+                                                                        disabled=move || update_action.pending().get()
+                                                                        on:click=move |_| beenden_klick(zum_beenden.clone())
+                                                                        on:dblclick=|ev| ev.stop_propagation()
+                                                                    >
+                                                                        "Beenden"
+                                                                    </button>
+                                                                </span>
+                                                            }.into_any(),
+                                                        };
+
+                                                        // Dauer-Spalte: fest berechnet oder live im Browser (jede Sekunde)
+                                                        let dauer_zelle = match f.ende {
+                                                            Some(ende) => view! { <span>{dauer_text(dauer_minuten(beginn, ende))}</span> }.into_any(),
+                                                            None => view! {
+                                                                <span class="text-success font-mono">
+                                                                    {move || match jetzt.get() {
+                                                                        Some(n) => laufend_text(n.signed_duration_since(beginn).num_seconds()),
+                                                                        None => "…".to_string(),
+                                                                    }}
+                                                                </span>
+                                                            }.into_any(),
+                                                        };
 
                                                         view! {
                                                             <tr
@@ -275,8 +352,8 @@ pub fn FastenSection() -> impl IntoView {
                                                                 on:dblclick=move |_| bearbeiten_oeffnen(zeile.clone())
                                                             >
                                                                 <td class="whitespace-nowrap font-mono">{beginn_str}</td>
-                                                                <td class="whitespace-nowrap font-mono">{ende_str}</td>
-                                                                <td class="text-right whitespace-nowrap font-semibold">{dauer}</td>
+                                                                <td class="whitespace-nowrap font-mono">{ende_zelle}</td>
+                                                                <td class="text-right whitespace-nowrap font-semibold">{dauer_zelle}</td>
                                                             </tr>
                                                         }
                                                     }).collect_view().into_any()
