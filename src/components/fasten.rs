@@ -1,13 +1,7 @@
-use chrono::Local;
 use leptos::prelude::*;
 
 use crate::backend::fasten::{add_fasten, delete_fasten, dauer_minuten, get_fasten, update_fasten, Fasten};
 use crate::components::modal::Modal;
-
-/// Heutiges Datum im Format JJJJ-MM-TT (für das Datumsfeld).
-fn heute_iso() -> String {
-    Local::now().date_naive().format("%Y-%m-%d").to_string()
-}
 
 /// Dauer als Text, z.B. "16 h 00 min" oder "30 h 15 min".
 fn dauer_text(minuten: i64) -> String {
@@ -16,7 +10,6 @@ fn dauer_text(minuten: i64) -> String {
 
 #[component]
 pub fn FastenSection() -> impl IntoView {
-    let (datum_input, set_datum_input) = signal(heute_iso());
     // Beginn und Ende als Zeitpunkt im Format JJJJ-MM-TTTHH:MM (Eingabe "datetime-local")
     let (beginn_input, set_beginn_input) = signal(String::new());
     let (ende_input, set_ende_input) = signal(String::new());
@@ -29,19 +22,15 @@ pub fn FastenSection() -> impl IntoView {
 
     let fasten_resource = Resource::new(|| (), |_| get_fasten());
 
-    let create_action = Action::new(
-        move |(datum, beginn, ende): &(String, String, String)| {
-            let (datum, beginn, ende) = (datum.clone(), beginn.clone(), ende.clone());
-            async move { add_fasten(datum, beginn, ende).await }
-        },
-    );
+    let create_action = Action::new(move |(beginn, ende): &(String, String)| {
+        let (beginn, ende) = (beginn.clone(), ende.clone());
+        async move { add_fasten(beginn, ende).await }
+    });
 
-    let update_action = Action::new(
-        move |(id, datum, beginn, ende): &(uuid::Uuid, String, String, String)| {
-            let (id, datum, beginn, ende) = (*id, datum.clone(), beginn.clone(), ende.clone());
-            async move { update_fasten(id, datum, beginn, ende).await }
-        },
-    );
+    let update_action = Action::new(move |(id, beginn, ende): &(uuid::Uuid, String, String)| {
+        let (id, beginn, ende) = (*id, beginn.clone(), ende.clone());
+        async move { update_fasten(id, beginn, ende).await }
+    });
 
     let delete_action = Action::new(move |id: &uuid::Uuid| {
         let id = *id;
@@ -102,7 +91,6 @@ pub fn FastenSection() -> impl IntoView {
         set_error_msg.set(None);
         set_loesch_bestaetigen.set(false);
         set_bearbeiten_id.set(Some(f.id));
-        set_datum_input.set(f.datum.format("%Y-%m-%d").to_string());
         set_beginn_input.set(f.beginn.format("%Y-%m-%dT%H:%M").to_string());
         set_ende_input.set(f.ende.format("%Y-%m-%dT%H:%M").to_string());
         set_modal_offen.set(true);
@@ -133,10 +121,10 @@ pub fn FastenSection() -> impl IntoView {
         set_error_msg.set(None);
         match bearbeiten_id.get() {
             Some(id) => {
-                update_action.dispatch((id, datum_input.get(), beginn, ende));
+                update_action.dispatch((id, beginn, ende));
             }
             None => {
-                create_action.dispatch((datum_input.get(), beginn, ende));
+                create_action.dispatch((beginn, ende));
             }
         }
     };
@@ -148,7 +136,7 @@ pub fn FastenSection() -> impl IntoView {
                     <div>
                         <h2 class="card-title text-lg sm:text-xl">"Fasten"</h2>
                         <p class="text-xs sm:text-sm text-base-content/70">
-                            "Erfassung deiner Fastenzeiten mit Datum, Beginn und Ende. Die Dauer wird berechnet."
+                            "Erfassung deiner Fastenzeiten mit Beginn und Ende. Die Dauer wird berechnet."
                         </p>
                     </div>
                     <button
@@ -160,7 +148,6 @@ pub fn FastenSection() -> impl IntoView {
                             set_loesch_bestaetigen.set(false);
                             set_beginn_input.set(String::new());
                             set_ende_input.set(String::new());
-                            set_datum_input.set(heute_iso());
                             set_modal_offen.set(true);
                         }
                     >
@@ -175,19 +162,6 @@ pub fn FastenSection() -> impl IntoView {
                     titel=move || if bearbeiten_id.get().is_some() { "Fasten bearbeiten".to_string() } else { "Neues Fasten".to_string() }
                 >
                     <form on:submit=on_submit class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div class="sm:col-span-2">
-                            <label class="label py-1">
-                                <span class="label-text font-medium text-sm">"Datum"</span>
-                            </label>
-                            <input
-                                type="date"
-                                class="input input-bordered w-full"
-                                prop:value=move || datum_input.get()
-                                on:input=move |ev| set_datum_input.set(event_target_value(&ev))
-                                required
-                            />
-                        </div>
-
                         <div>
                             <label class="label py-1">
                                 <span class="label-text font-medium text-sm">"Beginn"</span>
@@ -273,7 +247,6 @@ pub fn FastenSection() -> impl IntoView {
                                         <table class="table table-zebra table-xs w-full">
                                             <thead>
                                                 <tr class="text-xs uppercase text-base-content/70">
-                                                    <th class="w-32">"Datum"</th>
                                                     <th class="w-40">"Beginn"</th>
                                                     <th class="w-40">"Ende"</th>
                                                     <th class="text-right">"Dauer"</th>
@@ -283,14 +256,13 @@ pub fn FastenSection() -> impl IntoView {
                                                 {if leer {
                                                     view! {
                                                         <tr>
-                                                            <td colspan="4" class="text-center text-base-content/50 py-6">
+                                                            <td colspan="3" class="text-center text-base-content/50 py-6">
                                                                 "Noch keine Fastenzeiten erfasst."
                                                             </td>
                                                         </tr>
                                                     }.into_any()
                                                 } else {
                                                     items.into_iter().map(|f| {
-                                                        let datum_str = f.datum.format("%d.%m.%Y").to_string();
                                                         let beginn_str = f.beginn.format("%d.%m.%Y %H:%M").to_string();
                                                         let ende_str = f.ende.format("%d.%m.%Y %H:%M").to_string();
                                                         let dauer = dauer_text(dauer_minuten(f.beginn, f.ende));
@@ -302,7 +274,6 @@ pub fn FastenSection() -> impl IntoView {
                                                                 title="Doppelklick zum Bearbeiten"
                                                                 on:dblclick=move |_| bearbeiten_oeffnen(zeile.clone())
                                                             >
-                                                                <td class="whitespace-nowrap font-mono text-base-content/80">{datum_str}</td>
                                                                 <td class="whitespace-nowrap font-mono">{beginn_str}</td>
                                                                 <td class="whitespace-nowrap font-mono">{ende_str}</td>
                                                                 <td class="text-right whitespace-nowrap font-semibold">{dauer}</td>

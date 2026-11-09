@@ -47,7 +47,7 @@ src/
 │   ├── kontakte.rs    Kontakte (Vorname, Nachname)
 │   ├── schulden.rs    Schulden (Datum, Grund, Betrag, Kontakt 1:N)
 │   ├── rueckzahlungen.rs  Rückzahlungen (Datum, Betrag, Kontakt N:1), Reiter unter Schulden
-│   ├── fasten.rs      Fasten (Datum, Beginn, Ende; Dauer wird berechnet)
+│   ├── fasten.rs      Fasten (Beginn, Ende als Zeitpunkt; Dauer wird berechnet)
 │   └── chat.rs        Direkt- und Gruppenchats, Live-Abfrage, Tipp-Anzeige
 └── components/        app_layout, header, sideboard, dashboard, buchungen, fixkosten, monatskosten, schulden, rueckzahlungen, aufgaben, fasten, kontakte, chat, login
 style/tailwind.css     Tailwind-Einstieg, Farben (Primär #66023C)

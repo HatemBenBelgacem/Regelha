@@ -380,7 +380,6 @@ async fn run_schema_init(pool: &PgPool) -> Result<(), sqlx::Error> {
         r#"
         CREATE TABLE IF NOT EXISTS fasten (
             id UUID PRIMARY KEY,
-            datum DATE NOT NULL DEFAULT CURRENT_DATE,
             beginn TIMESTAMP NOT NULL,
             ende TIMESTAMP NOT NULL,
             benutzer_id UUID NOT NULL REFERENCES benutzer(id) ON DELETE CASCADE
@@ -411,6 +410,11 @@ async fn run_schema_init(pool: &PgPool) -> Result<(), sqlx::Error> {
     )
     .execute(pool)
     .await?;
+
+    // Das Datum steckt jetzt in Beginn und Ende. Die alte Spalte `datum` wird nach der Migration oben entfernt.
+    sqlx::query("ALTER TABLE fasten DROP COLUMN IF EXISTS datum;")
+        .execute(pool)
+        .await?;
 
     Ok(())
 }
