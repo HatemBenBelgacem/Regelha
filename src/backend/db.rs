@@ -416,5 +416,10 @@ async fn run_schema_init(pool: &PgPool) -> Result<(), sqlx::Error> {
         .execute(pool)
         .await?;
 
+    // Ende ist optional: ohne Ende läuft das Fasten noch (die Dauer tickt im Browser).
+    sqlx::query("ALTER TABLE fasten ALTER COLUMN ende DROP NOT NULL;")
+        .execute(pool)
+        .await?;
+
     Ok(())
 }
