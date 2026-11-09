@@ -14,3 +14,4 @@ pub mod push;
 pub mod rueckzahlungen;
 pub mod schulden;
 pub mod sideboard;
+pub mod startseite;

@@ -37,7 +37,7 @@ npm install                                                             # Tailwi
 src/
 ├── main.rs            Axum-Server, PORT von Railway, PgPool als Leptos-Kontext
 ├── lib.rs             Module, hydrate()
-├── app.rs             shell(), Routen: / · /buchungen · /fixkosten · /monatskosten · /schulden · /aufgaben · /fasten · /kontakte · /chat
+├── app.rs             shell(), Routen: / (Startseite mit allen Modulen) · /dashboard · /buchungen · /fixkosten · /monatskosten · /schulden · /aufgaben · /fasten · /kontakte · /chat
 ├── backend/
 │   ├── mod.rs         register_server_functions() – jede neue #[server]-Funktion hier eintragen!
 │   ├── db.rs          Pool, Datenbank anlegen, Tabellen erstellen          [ssr]
@@ -49,7 +49,7 @@ src/
 │   ├── rueckzahlungen.rs  Rückzahlungen (Datum, Betrag, Kontakt N:1), Reiter unter Schulden
 │   ├── fasten.rs      Fasten (Beginn, Ende als Zeitpunkt; Dauer wird berechnet)
 │   └── chat.rs        Direkt- und Gruppenchats, Live-Abfrage, Tipp-Anzeige
-└── components/        app_layout, header, sideboard, dashboard, buchungen, fixkosten, monatskosten, schulden, rueckzahlungen, aufgaben, fasten, kontakte, chat, login
+└── components/        app_layout, header, sideboard, startseite, dashboard, buchungen, fixkosten, monatskosten, schulden, rueckzahlungen, aufgaben, fasten, kontakte, chat, login
 style/tailwind.css     Tailwind-Einstieg, Farben (Primär #66023C)
 ```
 

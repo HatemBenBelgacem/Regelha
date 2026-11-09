@@ -9,7 +9,7 @@ use crate::components::{
     app_layout::AppLayout, aufgaben::AufgabenSection, buchungen::BuchungenSection,
     chat::ChatSection, dashboard::BudgetDashboard, fixkosten::FixkostenSection,
     monatskosten::MonatskostenSection, kontakte::KontakteSection,
-    schulden::SchuldenSection, fasten::FastenSection,
+    schulden::SchuldenSection, fasten::FastenSection, startseite::Startseite,
 };
 
 /// Meldet den Service Worker an (für die Installation als App). Läuft nach dem Laden der Seite.
@@ -53,11 +53,13 @@ pub fn App() -> impl IntoView {
         <Router>
             <Routes fallback=|| "Seite nicht gefunden.".into_view()>
                 <ParentRoute path=StaticSegment("") view=AppLayout>
-                    <Route path=StaticSegment("") view=BudgetDashboard/>
+                    <Route path=StaticSegment("") view=Startseite/>
+                    <Route path=StaticSegment("dashboard") view=BudgetDashboard/>
                     <Route path=StaticSegment("buchungen") view=BuchungenSection/>
                     <Route path=StaticSegment("fixkosten") view=FixkostenSection/>
                     <Route path=StaticSegment("monatskosten") view=MonatskostenSection/>
-                    <Route path=StaticSegment("schulden") view=SchuldenSection/>                    <Route path=StaticSegment("aufgaben") view=AufgabenSection/>
+                    <Route path=StaticSegment("schulden") view=SchuldenSection/>
+                    <Route path=StaticSegment("aufgaben") view=AufgabenSection/>
                     <Route path=StaticSegment("fasten") view=FastenSection/>
                     <Route path=StaticSegment("kontakte") view=KontakteSection/>
                     <Route path=StaticSegment("chat") view=ChatSection/>
