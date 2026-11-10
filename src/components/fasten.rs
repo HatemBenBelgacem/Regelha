@@ -268,8 +268,8 @@ pub fn FastenSection() -> impl IntoView {
                     </form>
                 </Modal>
 
-                // Card mit der Anzahl Tage, darüber die Tabelle
-                <div class="overflow-x-auto -mx-2 sm:mx-0">
+                // Card mit der Anzahl Tage, darunter die Fastenzeiten als Cards
+                <div>
                     <Suspense fallback=move || view! {
                         <div class="flex justify-center p-8">
                             <span class="loading loading-spinner loading-md text-primary"></span>
@@ -289,77 +289,96 @@ pub fn FastenSection() -> impl IntoView {
                                             </div>
                                         </div>
 
-                                        <table class="table table-zebra table-xs w-full">
-                                            <thead>
-                                                <tr class="text-xs uppercase text-base-content/70">
-                                                    <th class="w-40">"Beginn"</th>
-                                                    <th class="w-40">"Ende"</th>
-                                                    <th class="text-right">"Dauer"</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {if leer {
-                                                    view! {
-                                                        <tr>
-                                                            <td colspan="3" class="text-center text-base-content/50 py-6">
-                                                                "Noch keine Fastenzeiten erfasst."
-                                                            </td>
-                                                        </tr>
-                                                    }.into_any()
-                                                } else {
-                                                    items.into_iter().map(|f| {
-                                                        let beginn_str = f.beginn.format("%d.%m.%Y %H:%M").to_string();
-                                                        let zeile = f.clone();
-                                                        let zum_beenden = f.clone();
-                                                        let beginn = f.beginn;
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
+                                            {if leer {
+                                                view! {
+                                                    <p class="col-span-full text-center text-base-content/50 py-6">
+                                                        "Noch keine Fastenzeiten erfasst."
+                                                    </p>
+                                                }.into_any()
+                                            } else {
+                                                items.into_iter().map(|f| {
+                                                    let beginn_str = f.beginn.format("%d.%m.%Y %H:%M").to_string();
+                                                    let laeuft = f.ende.is_none();
+                                                    let zeile = f.clone();
+                                                    let zum_bearbeiten = f.clone();
+                                                    let zum_beenden = f.clone();
+                                                    let beginn = f.beginn;
 
-                                                        // Ende-Spalte: festes Datum oder "läuft" mit Knopf zum Beenden
-                                                        let ende_zelle = match f.ende {
-                                                            Some(ende) => view! { <span>{ende.format("%d.%m.%Y %H:%M").to_string()}</span> }.into_any(),
-                                                            None => view! {
-                                                                <span class="inline-flex items-center gap-2">
-                                                                    <span class="badge badge-success badge-sm text-white">"läuft"</span>
+                                                    // Ende: festes Datum oder "noch offen" (Fasten läuft)
+                                                    let ende_text = match f.ende {
+                                                        Some(ende) => ende.format("%d.%m.%Y %H:%M").to_string(),
+                                                        None => "noch offen".to_string(),
+                                                    };
+
+                                                    // Dauer: fest berechnet oder live im Browser (jede Sekunde)
+                                                    let dauer_anzeige = match f.ende {
+                                                        Some(ende) => view! { <span>{dauer_text(dauer_minuten(beginn, ende))}</span> }.into_any(),
+                                                        None => view! {
+                                                            <span class="text-success">
+                                                                {move || match jetzt.get() {
+                                                                    Some(n) => laufend_text(n.signed_duration_since(beginn).num_seconds()),
+                                                                    None => "…".to_string(),
+                                                                }}
+                                                            </span>
+                                                        }.into_any(),
+                                                    };
+
+                                                    view! {
+                                                        <div
+                                                            class="card bg-base-200 border border-base-300 shadow-sm cursor-pointer select-none hover:border-primary/60 transition-colors"
+                                                            title="Doppelklick zum Bearbeiten"
+                                                            on:dblclick=move |_| bearbeiten_oeffnen(zeile.clone())
+                                                        >
+                                                            <div class="card-body p-4 gap-3">
+                                                                <div class="flex items-start justify-between gap-2">
+                                                                    <div>
+                                                                        <p class="text-xs uppercase tracking-wide text-base-content/70">"Dauer"</p>
+                                                                        <p class="text-2xl font-bold font-mono text-primary">{dauer_anzeige}</p>
+                                                                    </div>
+                                                                    {laeuft.then(|| view! {
+                                                                        <span class="badge badge-success badge-sm text-white">"läuft"</span>
+                                                                    })}
+                                                                </div>
+
+                                                                <div class="text-sm space-y-1">
+                                                                    <div class="flex justify-between gap-2">
+                                                                        <span class="text-xs uppercase tracking-wide text-base-content/70 self-center">"Beginn"</span>
+                                                                        <span class="font-mono">{beginn_str}</span>
+                                                                    </div>
+                                                                    <div class="flex justify-between gap-2">
+                                                                        <span class="text-xs uppercase tracking-wide text-base-content/70 self-center">"Ende"</span>
+                                                                        <span class="font-mono">{ende_text}</span>
+                                                                    </div>
+                                                                </div>
+
+                                                                <div class="card-actions justify-end">
+                                                                    {laeuft.then(move || view! {
+                                                                        <button
+                                                                            type="button"
+                                                                            class="btn btn-sm btn-outline btn-primary"
+                                                                            disabled=move || update_action.pending().get()
+                                                                            on:click=move |_| beenden_klick(zum_beenden.clone())
+                                                                            on:dblclick=|ev| ev.stop_propagation()
+                                                                        >
+                                                                            "Beenden"
+                                                                        </button>
+                                                                    })}
                                                                     <button
                                                                         type="button"
-                                                                        class="btn btn-xs btn-outline btn-primary"
-                                                                        disabled=move || update_action.pending().get()
-                                                                        on:click=move |_| beenden_klick(zum_beenden.clone())
+                                                                        class="btn btn-sm btn-ghost"
+                                                                        on:click=move |_| bearbeiten_oeffnen(zum_bearbeiten.clone())
                                                                         on:dblclick=|ev| ev.stop_propagation()
                                                                     >
-                                                                        "Beenden"
+                                                                        "Bearbeiten"
                                                                     </button>
-                                                                </span>
-                                                            }.into_any(),
-                                                        };
-
-                                                        // Dauer-Spalte: fest berechnet oder live im Browser (jede Sekunde)
-                                                        let dauer_zelle = match f.ende {
-                                                            Some(ende) => view! { <span>{dauer_text(dauer_minuten(beginn, ende))}</span> }.into_any(),
-                                                            None => view! {
-                                                                <span class="text-success font-mono">
-                                                                    {move || match jetzt.get() {
-                                                                        Some(n) => laufend_text(n.signed_duration_since(beginn).num_seconds()),
-                                                                        None => "…".to_string(),
-                                                                    }}
-                                                                </span>
-                                                            }.into_any(),
-                                                        };
-
-                                                        view! {
-                                                            <tr
-                                                                class="cursor-pointer select-none hover:bg-base-200/60"
-                                                                title="Doppelklick zum Bearbeiten"
-                                                                on:dblclick=move |_| bearbeiten_oeffnen(zeile.clone())
-                                                            >
-                                                                <td class="whitespace-nowrap font-mono">{beginn_str}</td>
-                                                                <td class="whitespace-nowrap font-mono">{ende_zelle}</td>
-                                                                <td class="text-right whitespace-nowrap font-semibold">{dauer_zelle}</td>
-                                                            </tr>
-                                                        }
-                                                    }).collect_view().into_any()
-                                                }}
-                                            </tbody>
-                                        </table>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                }).collect_view().into_any()
+                                            }}
+                                        </div>
                                     }.into_any()
                                 }
                                 Err(err) => view! {
