@@ -45,8 +45,8 @@ src/
 │   ├── budget.rs      Buchungen, Fixkosten, Dashboard-Kennzahlen
 │   ├── aufgaben.rs    Aufgaben
 │   ├── kontakte.rs    Kontakte (Vorname, Nachname)
-│   ├── schulden.rs    Schulden (Datum, Grund, Betrag, Kontakt 1:N)
-│   ├── rueckzahlungen.rs  Rückzahlungen (Datum, Betrag, Kontakt N:1), Reiter unter Schulden
+│   ├── schulden.rs    Schulden (nur Kontakt, eine pro Kontakt) und Schuldenpositionen (Datum, Betrag; Schuld 1:N)
+│   ├── rueckzahlungen.rs  Rückzahlungen (Datum, Betrag, Kontakt N:1), Reiter in der Schuld-Detailansicht
 │   ├── fasten.rs      Fasten (Beginn, Ende als Zeitpunkt; Dauer wird berechnet)
 │   └── chat.rs        Direkt- und Gruppenchats, Live-Abfrage, Tipp-Anzeige
 └── components/        app_layout, header, sideboard, startseite, dashboard, buchungen, fixkosten, monatskosten, schulden, rueckzahlungen, aufgaben, fasten, kontakte, chat, login

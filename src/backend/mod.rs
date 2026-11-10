@@ -45,6 +45,10 @@ pub fn register_server_functions() {
     register_explicit::<schulden::AddSchuld>();
     register_explicit::<schulden::UpdateSchuld>();
     register_explicit::<schulden::DeleteSchuld>();
+    register_explicit::<schulden::GetSchuldenpositionen>();
+    register_explicit::<schulden::AddSchuldenposition>();
+    register_explicit::<schulden::UpdateSchuldenposition>();
+    register_explicit::<schulden::DeleteSchuldenposition>();
 
     // Rückzahlungen Server Functions
     register_explicit::<rueckzahlungen::GetRueckzahlungen>();
