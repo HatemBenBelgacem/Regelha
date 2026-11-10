@@ -27,7 +27,7 @@ pub async fn init_db_pool() -> Option<PgPool> {
                 if let Err(err) = run_schema_init(&pool).await {
                     log!("Warnung: Tabellen konnten nicht initialisiert werden: {err}");
                 } else {
-                    log!("PostgreSQL-Verbindung und Tabellen (benutzer, buchungen, fixkosten, aufgaben, kontakte, schulden, chat, rel_benutzer_chat, nachricht) bereit.");
+                    log!("PostgreSQL-Verbindung und Tabellen (benutzer, buchungen, fixkosten, aufgaben, kontakte, schulden, schuldenpositionen, chat, rel_benutzer_chat, nachricht) bereit.");
                 }
                 Some(pool)
             }
@@ -353,6 +353,92 @@ async fn run_schema_init(pool: &PgPool) -> Result<(), sqlx::Error> {
     sqlx::query("CREATE INDEX IF NOT EXISTS schulden_kontakt_id_idx ON schulden (kontakt_id);")
         .execute(pool)
         .await?;
+
+    // 11b. Tabelle `schuldenpositionen` (Felder: datum, betrag) mit N:1-Relation zu `schulden`:
+    // Eine Schuld hat viele Positionen. Wird die Schuld gelöscht, verschwinden auch ihre Positionen.
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS schuldenpositionen (
+            id UUID PRIMARY KEY,
+            schuld_id UUID NOT NULL REFERENCES schulden(id) ON DELETE CASCADE,
+            datum DATE NOT NULL DEFAULT CURRENT_DATE,
+            betrag DOUBLE PRECISION NOT NULL,
+            benutzer_id UUID NOT NULL REFERENCES benutzer(id) ON DELETE CASCADE
+        );
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
+    sqlx::query("CREATE INDEX IF NOT EXISTS schuldenpositionen_schuld_id_idx ON schuldenpositionen (schuld_id);")
+        .execute(pool)
+        .await?;
+
+    // Migration: Die Tabelle `schulden` enthält jetzt nur noch den Kontakt.
+    // Die alten Spalten (datum, grund, betrag) bleiben als Altdaten erhalten, sind aber nicht mehr Pflicht.
+    // Bestehende Beträge werden einmalig als Schuldenposition übernommen (gleiche Id wie die alte Schuld)
+    // und danach in `schulden.betrag` geleert, damit die Migration nicht erneut läuft.
+    sqlx::query(
+        r#"
+        DO $$
+        BEGIN
+            ALTER TABLE schulden ALTER COLUMN datum DROP NOT NULL;
+            ALTER TABLE schulden ALTER COLUMN grund DROP NOT NULL;
+            ALTER TABLE schulden ALTER COLUMN betrag DROP NOT NULL;
+
+            INSERT INTO schuldenpositionen (id, schuld_id, datum, betrag, benutzer_id)
+            SELECT id, id, COALESCE(datum, CURRENT_DATE), betrag, benutzer_id
+            FROM schulden
+            WHERE betrag IS NOT NULL
+            ON CONFLICT (id) DO NOTHING;
+
+            UPDATE schulden SET betrag = NULL WHERE betrag IS NOT NULL;
+        END $$;
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
+    // Pro Kontakt gibt es nur noch eine Schuld. Mehrere alte Schulden desselben Kontakts werden
+    // zusammengeführt: Ihre Positionen wandern zur ältesten Schuld, die übrigen Schulden entfallen.
+    sqlx::query(
+        r#"
+        WITH haupt AS (
+            SELECT id,
+                   FIRST_VALUE(id) OVER (PARTITION BY benutzer_id, kontakt_id ORDER BY datum NULLS LAST, id) AS haupt_id
+            FROM schulden
+            WHERE kontakt_id IS NOT NULL
+        )
+        UPDATE schuldenpositionen p
+        SET schuld_id = h.haupt_id
+        FROM haupt h
+        WHERE p.schuld_id = h.id AND h.id <> h.haupt_id;
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
+    sqlx::query(
+        r#"
+        WITH haupt AS (
+            SELECT id,
+                   FIRST_VALUE(id) OVER (PARTITION BY benutzer_id, kontakt_id ORDER BY datum NULLS LAST, id) AS haupt_id
+            FROM schulden
+            WHERE kontakt_id IS NOT NULL
+        )
+        DELETE FROM schulden s
+        USING haupt h
+        WHERE s.id = h.id AND h.id <> h.haupt_id;
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
+    sqlx::query(
+        "CREATE UNIQUE INDEX IF NOT EXISTS schulden_benutzer_kontakt_uidx ON schulden (benutzer_id, kontakt_id);",
+    )
+    .execute(pool)
+    .await?;
 
     // 12. Tabelle `rueckzahlungen` (Felder: datum, betrag) mit N:1-Relation zu `kontakte`:
     // Viele Rückzahlungen gehören zu einem Kontakt. ON DELETE RESTRICT verhindert, dass ein Kontakt mit Rückzahlungen verschwindet.

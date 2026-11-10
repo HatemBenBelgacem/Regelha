@@ -1,7 +1,6 @@
 use chrono::Local;
 use leptos::prelude::*;
 
-use crate::backend::kontakte::{anzeigename, get_kontakte};
 use crate::backend::rueckzahlungen::{
     add_rueckzahlung, delete_rueckzahlung, get_rueckzahlungen, update_rueckzahlung,
     Rueckzahlung,
@@ -13,13 +12,12 @@ fn heute_iso() -> String {
     Local::now().date_naive().format("%Y-%m-%d").to_string()
 }
 
-/// Reiter Rückzahlungen (unter der Seite Schulden): Eingabemaske und Tabelle.
+/// Reiter Rückzahlungen in der Detailansicht einer Schuld: Eingabemaske und Tabelle.
+/// Es werden nur die Rückzahlungen an den Kontakt der Schuld gezeigt und erfasst.
 /// `stand` ist der gemeinsame Zähler der Seite. Jede Änderung erhöht ihn, damit auch die Card neu rechnet.
 #[component]
-pub fn RueckzahlungTab(stand: RwSignal<u32>) -> impl IntoView {
+pub fn RueckzahlungTab(stand: RwSignal<u32>, kontakt_id: uuid::Uuid) -> impl IntoView {
     let (datum_input, set_datum_input) = signal(heute_iso());
-    // Id des gewählten Kontakts als Text (leer = noch kein Kontakt gewählt)
-    let (kontakt_input, set_kontakt_input) = signal(String::new());
     let (betrag_input, set_betrag_input) = signal(String::new());
     let (error_msg, set_error_msg) = signal(Option::<String>::None);
     let (modal_offen, set_modal_offen) = signal(false);
@@ -29,7 +27,6 @@ pub fn RueckzahlungTab(stand: RwSignal<u32>) -> impl IntoView {
     let (loesch_bestaetigen, set_loesch_bestaetigen) = signal(false);
 
     let rueckzahlungen_resource = Resource::new(move || stand.get(), |_| get_rueckzahlungen());
-    let kontakte_resource = Resource::new(|| (), |_| get_kontakte());
 
     let create_action = Action::new(
         move |(datum, betrag, kontakt_id): &(String, f64, uuid::Uuid)| {
@@ -52,7 +49,6 @@ pub fn RueckzahlungTab(stand: RwSignal<u32>) -> impl IntoView {
 
     // Formular leeren und schliessen (nach Erfolg)
     let formular_schliessen = move || {
-        set_kontakt_input.set(String::new());
         set_betrag_input.set(String::new());
         set_error_msg.set(None);
         set_bearbeiten_id.set(None);
@@ -105,7 +101,6 @@ pub fn RueckzahlungTab(stand: RwSignal<u32>) -> impl IntoView {
         set_loesch_bestaetigen.set(false);
         set_bearbeiten_id.set(Some(r.id));
         set_datum_input.set(r.datum.format("%Y-%m-%d").to_string());
-        set_kontakt_input.set(r.kontakt_id.to_string());
         set_betrag_input.set(format!("{:.2}", r.betrag));
         set_modal_offen.set(true);
     };
@@ -121,13 +116,6 @@ pub fn RueckzahlungTab(stand: RwSignal<u32>) -> impl IntoView {
 
     let on_submit = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
-        let kontakt_id = match uuid::Uuid::parse_str(&kontakt_input.get()) {
-            Ok(id) => id,
-            Err(_) => {
-                set_error_msg.set(Some("Bitte einen Kontakt auswählen.".to_string()));
-                return;
-            }
-        };
         let raw_amount = betrag_input.get().replace(',', ".");
         let betrag = match raw_amount.trim().parse::<f64>() {
             Ok(val) if val > 0.0 => val,
@@ -160,7 +148,6 @@ pub fn RueckzahlungTab(stand: RwSignal<u32>) -> impl IntoView {
                         set_bearbeiten_id.set(None);
                         set_error_msg.set(None);
                         set_loesch_bestaetigen.set(false);
-                        set_kontakt_input.set(String::new());
                         set_betrag_input.set(String::new());
                         set_datum_input.set(heute_iso());
                         set_modal_offen.set(true);
@@ -188,53 +175,6 @@ pub fn RueckzahlungTab(stand: RwSignal<u32>) -> impl IntoView {
                             on:input=move |ev| set_datum_input.set(event_target_value(&ev))
                             required
                         />
-                    </div>
-
-                    <div>
-                        <label class="label py-1">
-                            <span class="label-text font-medium text-sm">"Kontakt"</span>
-                        </label>
-                        <select
-                            class="select select-bordered w-full"
-                            on:change=move |ev| set_kontakt_input.set(event_target_value(&ev))
-                            required
-                        >
-                            <option value="" prop:selected=move || kontakt_input.get().is_empty()>
-                                "Bitte Kontakt wählen"
-                            </option>
-                            {move || {
-                                kontakte_resource
-                                    .get()
-                                    .and_then(|r| r.ok())
-                                    .unwrap_or_default()
-                                    .into_iter()
-                                    .map(|k| {
-                                        let id_text = k.id.to_string();
-                                        let id_fuer_auswahl = id_text.clone();
-                                        let name = anzeigename(&k.vorname, &k.nachname);
-                                        view! {
-                                            <option
-                                                value=id_text
-                                                prop:selected=move || kontakt_input.get() == id_fuer_auswahl
-                                            >
-                                                {name}
-                                            </option>
-                                        }
-                                    })
-                                    .collect_view()
-                            }}
-                        </select>
-                        {move || {
-                            kontakte_resource
-                                .get()
-                                .and_then(|r| r.ok())
-                                .is_some_and(|liste| liste.is_empty())
-                                .then(|| view! {
-                                    <p class="text-xs text-warning mt-1">
-                                        "Noch keine Kontakte vorhanden. Lege zuerst einen Kontakt an."
-                                    </p>
-                                })
-                        }}
                     </div>
 
                     <div>
@@ -293,14 +233,18 @@ pub fn RueckzahlungTab(stand: RwSignal<u32>) -> impl IntoView {
                     {move || {
                         rueckzahlungen_resource.get().map(|res| match res {
                             Ok(items) => {
+                                let items: Vec<Rueckzahlung> = items
+                                    .into_iter()
+                                    .filter(|r| r.kontakt_id == kontakt_id)
+                                    .collect();
                                 let leer = items.is_empty();
+                                let summe: f64 = items.iter().map(|r| r.betrag).sum::<f64>() + 0.0;
 
                                 view! {
                                     <table class="table table-zebra table-xs w-full">
                                         <thead>
                                             <tr class="text-xs uppercase text-base-content/70">
                                                 <th class="w-32">"Datum"</th>
-                                                <th>"Kontakt"</th>
                                                 <th class="text-right">"Betrag (CHF)"</th>
                                             </tr>
                                         </thead>
@@ -308,7 +252,7 @@ pub fn RueckzahlungTab(stand: RwSignal<u32>) -> impl IntoView {
                                             {if leer {
                                                 view! {
                                                     <tr>
-                                                        <td colspan="3" class="text-center text-base-content/50 py-6">
+                                                        <td colspan="2" class="text-center text-base-content/50 py-6">
                                                             "Noch keine Rückzahlungen erfasst."
                                                         </td>
                                                     </tr>
@@ -326,13 +270,20 @@ pub fn RueckzahlungTab(stand: RwSignal<u32>) -> impl IntoView {
                                                             on:dblclick=move |_| bearbeiten_oeffnen(zeile.clone())
                                                         >
                                                             <td class="whitespace-nowrap font-mono text-base-content/80">{datum_str}</td>
-                                                            <td class="font-medium">{r.kontakt}</td>
                                                             <td class="text-right whitespace-nowrap font-mono">{betrag_str}</td>
                                                         </tr>
                                                     }
                                                 }).collect_view().into_any()
                                             }}
                                         </tbody>
+                                        {(!leer).then(|| view! {
+                                            <tfoot>
+                                                <tr class="font-bold text-xs bg-base-200/50">
+                                                    <td>"Total"</td>
+                                                    <td class="text-right text-success whitespace-nowrap font-mono">{format!("CHF {:.2}", summe)}</td>
+                                                </tr>
+                                            </tfoot>
+                                        })}
                                     </table>
                                 }.into_any()
                             }
