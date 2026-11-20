@@ -23,7 +23,7 @@ pub fn shell(options: LeptosOptions) -> impl IntoView {
                 <meta charset="utf-8"/>
                 <meta name="viewport" content="width=device-width, initial-scale=1"/>
                 // PWA: Installation als App auf dem Handy
-                <meta name="theme-color" content="#66023C"/>
+                <meta name="theme-color" content="#004445"/>
                 <meta name="apple-mobile-web-app-capable" content="yes"/>
                 <meta name="apple-mobile-web-app-title" content="Regelha"/>
                 <link rel="manifest" href="/manifest.json"/>

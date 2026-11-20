@@ -5,12 +5,25 @@
   themes: light --default;
 }
 
+/* Regelha-Farbpalette (Canva). Hier ändern, überall sonst wird darauf verwiesen. */
+@theme {
+  --color-regelha-blauschwarz: #021C1E; /* Blue Black: Fliesstext */
+  --color-regelha-petrol: #004445;      /* Cadet Blue: Primärfarbe (Kopfzeile, Buttons, Aktiv) */
+  --color-regelha-regen: #2C7873;       /* Rain: Sekundärfarbe, Hover, Hinweise */
+  --color-regelha-gruen: #6FB98F;       /* Greenery: Akzent (Statuspunkt, Hervorhebung) */
+}
+
 :root,
 [data-theme="light"] {
-  --color-primary: #66023C;
+  --color-primary: var(--color-regelha-petrol);
   --color-primary-content: #ffffff;
-  --color-secondary: #7A2048;
+  --color-secondary: var(--color-regelha-regen);
   --color-secondary-content: #ffffff;
+  --color-accent: var(--color-regelha-gruen);
+  --color-accent-content: var(--color-regelha-blauschwarz);
+  --color-neutral: var(--color-regelha-blauschwarz);
+  --color-neutral-content: #ffffff;
+  --color-base-content: var(--color-regelha-blauschwarz);
   --color-base-100: #ffffff;
   --color-base-200: #F8FAFC;
   --color-base-300: #E2E8F0;

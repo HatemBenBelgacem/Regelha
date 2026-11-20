@@ -4,7 +4,7 @@
 // So zeigt das Handy nach einem Update immer den neuen Stand. Zwischengespeichert werden nur
 // die Icons, das Manifest und das Offline-Fenster.
 
-const VERSION = 'regelha-pwa-v1';
+const VERSION = 'regelha-pwa-v2';
 const STATISCH = [
   '/offline.html',
   '/manifest.json',

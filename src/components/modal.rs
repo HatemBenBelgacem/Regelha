@@ -35,7 +35,7 @@ pub fn Modal(
             >
                 <div class="modal-box w-full sm:max-w-2xl p-4 sm:p-6">
                     <div class="flex items-center justify-between gap-2 mb-4">
-                        <h3 class="font-bold text-lg text-[#66023C]">{move || titel.get()}</h3>
+                        <h3 class="font-bold text-lg text-regelha-petrol">{move || titel.get()}</h3>
                         <button
                             type="button"
                             class="btn btn-circle btn-ghost"
