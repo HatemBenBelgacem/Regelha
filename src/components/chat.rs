@@ -286,7 +286,7 @@ fn tipp_text(namen: &[String]) -> String {
 }
 
 // Zeilen der DaisyUI-Listen (`list` / `list-row`) für Gruppen und Chatteilnehmer
-const LISTEN_ZEILE_AKTIV: &str = "list-row w-full text-left items-center gap-3 px-4 py-3 md:py-2.5 cursor-pointer bg-[#66023C]/10 text-[#66023C] transition-colors";
+const LISTEN_ZEILE_AKTIV: &str = "list-row w-full text-left items-center gap-3 px-4 py-3 md:py-2.5 cursor-pointer bg-regelha-petrol/10 text-regelha-petrol transition-colors";
 const LISTEN_ZEILE: &str = "list-row w-full text-left items-center gap-3 px-4 py-3 md:py-2.5 cursor-pointer hover:bg-base-200 active:bg-base-300 transition-colors";
 
 #[component]
@@ -657,7 +657,7 @@ pub fn ChatSection() -> impl IntoView {
                                 <span class="text-xs font-semibold uppercase tracking-wide opacity-60">"Gruppenchats"</span>
                                 <button
                                     type="button"
-                                    class="btn btn-md min-h-11 md:min-h-0 rounded-full bg-[#66023C] hover:bg-[#7A2048] text-white border-none px-4"
+                                    class="btn btn-md min-h-11 md:min-h-0 rounded-full bg-regelha-petrol hover:bg-regelha-regen text-white border-none px-4"
                                     on:click=move |_| set_show_group_form.set(true)
                                 >
                                     "+ Gruppe"
@@ -707,7 +707,7 @@ pub fn ChatSection() -> impl IntoView {
                                                         }
                                                     >
                                                         <div class="avatar avatar-placeholder">
-                                                            <div class="w-11 md:w-10 rounded-full bg-[#7A2048]/15 text-[#66023C]">
+                                                            <div class="w-11 md:w-10 rounded-full bg-regelha-regen/15 text-regelha-petrol">
                                                                 <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                                                     <path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
                                                                 </svg>
@@ -806,7 +806,7 @@ pub fn ChatSection() -> impl IntoView {
                                                         }
                                                     >
                                                         <div class="avatar avatar-placeholder">
-                                                            <div class="w-11 md:w-10 rounded-full bg-[#66023C] text-white">
+                                                            <div class="w-11 md:w-10 rounded-full bg-regelha-petrol text-white">
                                                                 <span class="text-sm font-bold">{initial}</span>
                                                             </div>
                                                         </div>
@@ -823,7 +823,7 @@ pub fn ChatSection() -> impl IntoView {
                                                             })
                                                         })}
                                                         {move || if wird_geoeffnet() {
-                                                            view! { <span class="loading loading-spinner loading-sm text-[#66023C]"></span> }.into_any()
+                                                            view! { <span class="loading loading-spinner loading-sm text-regelha-petrol"></span> }.into_any()
                                                         } else {
                                                             view! {
                                                                 <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -854,7 +854,7 @@ pub fn ChatSection() -> impl IntoView {
                     class=move || {
                         let mobile_vis = if mobile_show_list.get() { "hidden md:flex" } else { "flex" };
                         let border_style = if is_dragging.get() {
-                            "border-2 border-dashed border-[#66023C] bg-[#66023C]/5"
+                            "border-2 border-dashed border-regelha-petrol bg-regelha-petrol/5"
                         } else {
                             "border border-base-300"
                         };
@@ -875,7 +875,7 @@ pub fn ChatSection() -> impl IntoView {
                     <div class="flex items-center gap-2 sm:gap-3 px-2 sm:px-4 py-2 sm:py-3 border-b border-slate-200 shrink-0">
                         <button
                             type="button"
-                            class="btn btn-ghost btn-square btn-md min-h-11 min-w-11 md:hidden text-[#66023C] -ml-1"
+                            class="btn btn-ghost btn-square btn-md min-h-11 min-w-11 md:hidden text-regelha-petrol -ml-1"
                             on:click=move |_| set_mobile_show_list.set(true)
                             aria-label="Zurück zur Chatliste"
                         >
@@ -903,12 +903,12 @@ pub fn ChatSection() -> impl IntoView {
                                         .unwrap_or_else(|| "?".to_string())
                                 };
                                 view! {
-                                    <div class="w-10 h-10 rounded-full bg-[#66023C] text-white flex items-center justify-center text-sm font-bold shrink-0">
+                                    <div class="w-10 h-10 rounded-full bg-regelha-petrol text-white flex items-center justify-center text-sm font-bold shrink-0">
                                         {avatar}
                                     </div>
                                     <div class="min-w-0 flex-1">
                                         <div class="flex items-center gap-2">
-                                            <h2 class="text-base lg:text-lg font-bold text-[#66023C] truncate">
+                                            <h2 class="text-base lg:text-lg font-bold text-regelha-petrol truncate">
                                                 {chat.name}
                                             </h2>
                                             <span class="hidden sm:inline-flex badge badge-sm badge-ghost shrink-0">
@@ -923,7 +923,7 @@ pub fn ChatSection() -> impl IntoView {
                                                 }.into_any()
                                             } else {
                                                 view! {
-                                                    <p class="text-xs font-medium text-[#7A2048] truncate">
+                                                    <p class="text-xs font-medium text-regelha-regen truncate">
                                                         {format!("{} …", tipp_text(&t))}
                                                     </p>
                                                 }.into_any()
@@ -945,7 +945,7 @@ pub fn ChatSection() -> impl IntoView {
 
                     // Drag & Drop Hinweis-Banner wenn Datei gezogen wird
                     {move || is_dragging.get().then(|| view! {
-                        <div class="mx-3 mt-3 p-3 rounded-xl bg-[#66023C]/10 border border-[#66023C] text-[#66023C] text-center text-sm font-semibold shrink-0">
+                        <div class="mx-3 mt-3 p-3 rounded-xl bg-regelha-petrol/10 border border-regelha-petrol text-regelha-petrol text-center text-sm font-semibold shrink-0">
                             "📂 Bilder oder Dokumente hier loslassen, um sie anzuhängen"
                         </div>
                     })}
@@ -992,9 +992,9 @@ pub fn ChatSection() -> impl IntoView {
                             (!t.is_empty()).then(|| view! {
                                 <div class="flex items-end gap-2 mt-3" aria-live="polite">
                                     <div class="rounded-2xl rounded-bl-md bg-white border border-slate-200 shadow-xs px-4 py-3 flex items-center gap-1">
-                                        <span class="w-2 h-2 rounded-full bg-[#66023C]/70 animate-bounce [animation-delay:-0.3s]"></span>
-                                        <span class="w-2 h-2 rounded-full bg-[#66023C]/70 animate-bounce [animation-delay:-0.15s]"></span>
-                                        <span class="w-2 h-2 rounded-full bg-[#66023C]/70 animate-bounce"></span>
+                                        <span class="w-2 h-2 rounded-full bg-regelha-petrol/70 animate-bounce [animation-delay:-0.3s]"></span>
+                                        <span class="w-2 h-2 rounded-full bg-regelha-petrol/70 animate-bounce [animation-delay:-0.15s]"></span>
+                                        <span class="w-2 h-2 rounded-full bg-regelha-petrol/70 animate-bounce"></span>
                                     </div>
                                     <span class="text-xs text-slate-500 pb-1">{format!("{} …", tipp_text(&t))}</span>
                                 </div>
@@ -1048,7 +1048,7 @@ pub fn ChatSection() -> impl IntoView {
                     <form on:submit=on_send_submit class="px-2 sm:px-4 py-2 sm:py-3 border-t border-slate-200 bg-base-100 shrink-0">
                         <div class="flex items-center gap-2">
                             <label
-                                class="btn btn-ghost btn-circle btn-md min-h-11 min-w-11 md:min-h-0 md:min-w-0 text-slate-500 hover:bg-[#66023C]/10 hover:text-[#66023C] cursor-pointer shrink-0"
+                                class="btn btn-ghost btn-circle btn-md min-h-11 min-w-11 md:min-h-0 md:min-w-0 text-slate-500 hover:bg-regelha-petrol/10 hover:text-regelha-petrol cursor-pointer shrink-0"
                                 title="Bilder oder Dokumente anhängen"
                                 aria-label="Bilder oder Dokumente anhängen"
                             >
@@ -1066,7 +1066,7 @@ pub fn ChatSection() -> impl IntoView {
                             <input
                                 type="text"
                                 placeholder="Nachricht schreiben…"
-                                class="input input-bordered input-md md:input-sm min-h-11 md:min-h-0 rounded-full flex-1 min-w-0 text-base md:text-sm px-4 focus:border-[#66023C] focus:outline-[#66023C]/30"
+                                class="input input-bordered input-md md:input-sm min-h-11 md:min-h-0 rounded-full flex-1 min-w-0 text-base md:text-sm px-4 focus:border-regelha-petrol focus:outline-regelha-petrol/30"
                                 prop:value=move || nachricht_text.get()
                                 on:input=on_text_input
                                 on:paste=on_paste_files
@@ -1197,7 +1197,7 @@ fn NachrichtBubble(m: ChatNachricht, my_id: Memo<Option<Uuid>>) -> impl IntoView
             })}
             <div class=move || {
                 if is_mine() {
-                    "max-w-[85%] sm:max-w-[75%] xl:max-w-[65%] rounded-2xl rounded-br-md px-3.5 py-2 bg-[#66023C] text-white shadow-xs space-y-1.5"
+                    "max-w-[85%] sm:max-w-[75%] xl:max-w-[65%] rounded-2xl rounded-br-md px-3.5 py-2 bg-regelha-petrol text-white shadow-xs space-y-1.5"
                 } else {
                     "max-w-[85%] sm:max-w-[75%] xl:max-w-[65%] rounded-2xl rounded-bl-md px-3.5 py-2 bg-white text-slate-800 border border-slate-200 shadow-xs space-y-1.5"
                 }
@@ -1236,7 +1236,7 @@ fn NachrichtBubble(m: ChatNachricht, my_id: Memo<Option<Uuid>>) -> impl IntoView
                                 <a
                                     href=daten
                                     download=dateiname
-                                    class="btn min-h-10 md:min-h-0 bg-white text-[#66023C] hover:bg-slate-100 border-none shrink-0"
+                                    class="btn min-h-10 md:min-h-0 bg-white text-regelha-petrol hover:bg-slate-100 border-none shrink-0"
                                 >
                                     "Herunterladen"
                                 </a>

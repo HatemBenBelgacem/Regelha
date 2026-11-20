@@ -50,7 +50,7 @@ src/
 │   ├── fasten.rs      Fasten (Beginn, Ende als Zeitpunkt; Dauer wird berechnet)
 │   └── chat.rs        Direkt- und Gruppenchats, Live-Abfrage, Tipp-Anzeige
 └── components/        app_layout, header, sideboard, startseite, dashboard, buchungen, fixkosten, monatskosten, schulden, rueckzahlungen, aufgaben, fasten, kontakte, chat, login
-style/tailwind.css     Tailwind-Einstieg, Farben (Primär #66023C)
+style/tailwind.css     Tailwind-Einstieg, Farben (Primär #004445, Palette in style/tailwind.css)
 ```
 
 ## Regeln

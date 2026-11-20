@@ -85,10 +85,10 @@ pub fn Startseite() -> impl IntoView {
                             view! {
                                 <a
                                     href=m.pfad
-                                    class="flex items-center gap-4 p-4 rounded-box border border-slate-200 bg-white hover:border-[#66023C] hover:bg-slate-50 transition-colors"
+                                    class="flex items-center gap-4 p-4 rounded-box border border-slate-200 bg-white hover:border-regelha-petrol hover:bg-slate-50 transition-colors"
                                 >
-                                    <div class="flex-none flex items-center justify-center w-12 h-12 rounded-xl bg-[#66023C]/10">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-[#66023C]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <div class="flex-none flex items-center justify-center w-12 h-12 rounded-xl bg-regelha-petrol/10">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-regelha-petrol" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d=m.icon />
                                         </svg>
                                     </div>

@@ -12,18 +12,18 @@ pub fn Sideboard(
     let url = use_url();
     // Ungelesene Chats (kommt aus AppLayout), für den Zähler am Menüpunkt "Chat"
     let ungelesene = use_context::<Ungelesene>();
-    // Nur das Icon und der Text des aktiven Menüpunkts werden lila (#66023C / #7A2048) eingefärbt
+    // Nur das Icon und der Text des aktiven Menüpunkts werden lila (regelha-petrol / regelha-regen) eingefärbt
     let nav_link_class = move |path: &str| {
         if url.with(|u| u.path() == path) {
-            "flex items-center gap-3 px-3 py-2 rounded-lg font-semibold text-[#66023C] bg-transparent hover:bg-slate-100/70 transition-colors"
+            "flex items-center gap-3 px-3 py-2 rounded-lg font-semibold text-regelha-petrol bg-transparent hover:bg-slate-100/70 transition-colors"
         } else {
-            "flex items-center gap-3 px-3 py-2 rounded-lg font-normal text-slate-600 bg-transparent hover:text-[#7A2048] hover:bg-slate-100/60 transition-colors"
+            "flex items-center gap-3 px-3 py-2 rounded-lg font-normal text-slate-600 bg-transparent hover:text-regelha-regen hover:bg-slate-100/60 transition-colors"
         }
     };
 
     let nav_icon_class = move |path: &str| {
         if url.with(|u| u.path() == path) {
-            "h-5 w-5 text-[#66023C]"
+            "h-5 w-5 text-regelha-petrol"
         } else {
             "h-5 w-5 text-slate-400"
         }
@@ -34,7 +34,7 @@ pub fn Sideboard(
             <div class="space-y-4">
                 // Mobile Header im Drawer mit Schließen-Button
                 <div class="flex items-center justify-between px-2 pt-1 lg:hidden border-b border-slate-100 pb-3">
-                    <span class="font-bold text-lg text-[#66023C]">"Regelha"</span>
+                    <span class="font-bold text-lg text-regelha-petrol">"Regelha"</span>
                     <label
                         for="app-sideboard-drawer"
                         class="btn btn-circle btn-ghost"
@@ -160,7 +160,7 @@ pub fn Sideboard(
             <div class="space-y-3">
                 <PushBenachrichtigungen/>
                 <div class="p-3 rounded-box bg-[#F8FAFC] border border-slate-200/80 text-xs text-slate-600 space-y-1">
-                <div class="font-semibold text-[#66023C]">"Regelha"</div>
+                <div class="font-semibold text-regelha-petrol">"Regelha"</div>
                 <p>"Übersicht über Tages-, Monats- und prognostizierte Ausgaben."</p>
                 </div>
             </div>
