@@ -1,4 +1,3 @@
-use chrono::{Datelike, Local};
 use leptos::prelude::*;
 use uuid::Uuid;
 
@@ -7,6 +6,7 @@ use crate::backend::kategorien::{get_kategorien, kategorie_name, Kategorie};
 
 /// Formatiert einen Saldo mit Vorzeichen (z.B. "+ CHF 12.00" / "- CHF 3.50").
 fn saldo_text(saldo: f64) -> String {
+    let saldo = saldo + 0.0; // -0.0 vermeiden, siehe betrag_text
     if saldo >= 0.0 {
         format!("+ CHF {:.2}", saldo)
     } else {
@@ -23,7 +23,8 @@ fn saldo_class(saldo: f64) -> &'static str {
 }
 
 fn betrag_text(wert: f64) -> String {
-    format!("{:.2}", wert)
+    // `+ 0.0` macht aus -0.0 (Summe einer leeren Liste) eine 0, damit nicht "-0.00" erscheint
+    format!("{:.2}", wert + 0.0)
 }
 
 /// Farben der Beträge: Fixkosten schwarz, Fixeinnahmen grün.
@@ -216,24 +217,48 @@ fn summen_zeile(
     }
 }
 
-fn zelle_view(zelle: Zelle) -> impl IntoView {
+/// Eine Monatszelle. Die Zelle des laufenden Monats bekommt eine Hintergrundfarbe.
+fn zelle_view(zelle: Zelle, hervorgehoben: bool) -> impl IntoView {
     let Zelle { text, klasse } = zelle;
+    let klasse = if hervorgehoben {
+        format!("{klasse} bg-primary/10")
+    } else {
+        klasse.to_string()
+    };
     view! { <td class=klasse>{text}</td> }
 }
 
-fn kopf_view((name, anzahl): (String, String)) -> impl IntoView {
+/// Alle Monatszellen einer Zeile. `aktuell` ist die Spalte des laufenden Monats (falls vorhanden).
+fn zellen_views(zellen: Vec<Zelle>, aktuell: Option<usize>) -> impl IntoView {
+    zellen
+        .into_iter()
+        .enumerate()
+        .map(|(i, zelle)| zelle_view(zelle, Some(i) == aktuell))
+        .collect_view()
+}
+
+/// Kopfzelle eines Monats. Der laufende Monat ist farblich und mit einem Hinweis markiert.
+fn kopf_view((name, anzahl, aktuell): (String, String, bool)) -> impl IntoView {
+    let klasse = if aktuell {
+        "text-right normal-case bg-primary/10 text-primary"
+    } else {
+        "text-right normal-case"
+    };
     view! {
-        <th class="text-right normal-case">
+        <th class=klasse aria-current=aktuell.then_some("date")>
             <div class="flex flex-col items-end">
                 <span class="whitespace-nowrap">{name}</span>
                 <span class="text-xs font-normal text-base-content/50 whitespace-nowrap">{anzahl}</span>
+                {aktuell.then(|| view! {
+                    <span class="badge badge-primary badge-xs mt-1 whitespace-nowrap">"Aktuell"</span>
+                })}
             </div>
         </th>
     }
 }
 
 /// Eine Posten-Zeile. Sie ist unter ihrer Kategorie eingerückt.
-fn posten_zeile_view(zeile: PostenZeile) -> impl IntoView {
+fn posten_zeile_view(zeile: PostenZeile, aktuell: Option<usize>) -> impl IntoView {
     let PostenZeile { titel, untertitel, zellen, summe } = zeile;
     view! {
         <tr>
@@ -243,28 +268,33 @@ fn posten_zeile_view(zeile: PostenZeile) -> impl IntoView {
                     <span class="text-xs font-normal text-base-content/50">{untertitel}</span>
                 </div>
             </td>
-            {zellen.into_iter().map(zelle_view).collect_view()}
-            {zelle_view(summe)}
+            {zellen_views(zellen, aktuell)}
+            {zelle_view(summe, false)}
         </tr>
     }
 }
 
 /// Eine Kategorie: zuerst die Summenzeile der Kategorie, darunter ihre Posten.
-fn gruppe_view(gruppe: Gruppe) -> impl IntoView {
+fn gruppe_view(gruppe: Gruppe, aktuell: Option<usize>) -> impl IntoView {
     let Gruppe { titel, zeilen, zellen, summe, .. } = gruppe;
     view! {
         <tr class="font-semibold bg-base-200/60">
             <td class="sticky left-0 z-10 bg-base-200 whitespace-nowrap">{titel}</td>
-            {zellen.into_iter().map(zelle_view).collect_view()}
-            {zelle_view(summe)}
+            {zellen_views(zellen, aktuell)}
+            {zelle_view(summe, false)}
         </tr>
-        {zeilen.into_iter().map(posten_zeile_view).collect_view()}
+        {zeilen.into_iter().map(|z| posten_zeile_view(z, aktuell)).collect_view()}
     }
 }
 
 /// Ein Abschnitt der Tabelle ("Fixkosten" oder "Fixeinnahmen") mit allen Kategorien.
 /// Ohne Posten in diesem Abschnitt bleibt er leer.
-fn abschnitt_view(titel: &'static str, gruppen: Vec<Gruppe>, spalten: String) -> AnyView {
+fn abschnitt_view(
+    titel: &'static str,
+    gruppen: Vec<Gruppe>,
+    spalten: String,
+    aktuell: Option<usize>,
+) -> AnyView {
     if gruppen.is_empty() {
         return ().into_any();
     }
@@ -274,12 +304,12 @@ fn abschnitt_view(titel: &'static str, gruppen: Vec<Gruppe>, spalten: String) ->
                 {titel}
             </td>
         </tr>
-        {gruppen.into_iter().map(gruppe_view).collect_view()}
+        {gruppen.into_iter().map(|g| gruppe_view(g, aktuell)).collect_view()}
     }
     .into_any()
 }
 
-fn summen_zeile_view(zeile: SummenZeile) -> impl IntoView {
+fn summen_zeile_view(zeile: SummenZeile, aktuell: Option<usize>) -> impl IntoView {
     let SummenZeile { titel, untertitel, zellen, summe } = zeile;
     view! {
         <tr class="font-bold text-xs bg-base-200/50">
@@ -289,13 +319,14 @@ fn summen_zeile_view(zeile: SummenZeile) -> impl IntoView {
                     <span class="text-xs font-normal text-base-content/70">{untertitel}</span>
                 </div>
             </td>
-            {zellen.into_iter().map(zelle_view).collect_view()}
-            {zelle_view(summe)}
+            {zellen_views(zellen, aktuell)}
+            {zelle_view(summe, false)}
         </tr>
     }
 }
 
 /// Die Tabelle: Monate als Spalten. Fixkosten und Fixeinnahmen stehen je nach Kategorie gruppiert, unten die Summen.
+/// Die Spalte des laufenden Monats ist hervorgehoben.
 fn monatstabelle(monate: Vec<MonatsKosten>, kategorien: Vec<Kategorie>) -> impl IntoView {
     let ausgaben = gruppen(
         &monate,
@@ -309,12 +340,13 @@ fn monatstabelle(monate: Vec<MonatsKosten>, kategorien: Vec<Kategorie>) -> impl 
         |m| m.fixeinnahmen_posten.as_slice(),
         FARBEN_EINNAHMEN,
     );
+    // Position der Spalte des laufenden Monats. Die Entscheidung trifft der Server, damit Server und Browser gleich rendern.
+    let aktuell = monate.iter().position(|m| m.ist_aktueller_monat);
 
-    // Der Durchschnitt zählt nur Monate bis heute. Zukunftsmonate enthalten nur die Prognose.
-    let heute = Local::now().date_naive();
+    // Der Durchschnitt zählt nur Monate bis zum aktuellen Monat. Zukunftsmonate enthalten nur die Prognose.
     let vergangene: Vec<&MonatsKosten> = monate
         .iter()
-        .filter(|m| (m.jahr, m.monat) <= (heute.year(), heute.month()))
+        .take(aktuell.map_or(0, |i| i + 1))
         .collect();
     let anzahl_monate = vergangene.len().max(1) as f64;
     let total_summe: f64 = vergangene.iter().map(|m| m.total_kosten).sum();
@@ -363,9 +395,15 @@ fn monatstabelle(monate: Vec<MonatsKosten>, kategorien: Vec<Kategorie>) -> impl 
         ),
     ];
 
-    let kopf: Vec<(String, String)> = monate
+    let kopf: Vec<(String, String, bool)> = monate
         .iter()
-        .map(|m| (m.monat_name.clone(), format!("{} Buchungen", m.anzahl_buchungen)))
+        .map(|m| {
+            (
+                m.monat_name.clone(),
+                format!("{} Buchungen", m.anzahl_buchungen),
+                m.ist_aktueller_monat,
+            )
+        })
         .collect();
     let leer = ausgaben.is_empty() && einnahmen.is_empty();
     let colspan = (monate.len() + 2).to_string();
@@ -388,11 +426,11 @@ fn monatstabelle(monate: Vec<MonatsKosten>, kategorien: Vec<Kategorie>) -> impl 
                         </td>
                     </tr>
                 })}
-                {abschnitt_view("Fixkosten", ausgaben, colspan.clone())}
-                {abschnitt_view("Fixeinnahmen", einnahmen, colspan)}
+                {abschnitt_view("Fixkosten", ausgaben, colspan.clone(), aktuell)}
+                {abschnitt_view("Fixeinnahmen", einnahmen, colspan, aktuell)}
             </tbody>
             <tfoot>
-                {summen.into_iter().map(summen_zeile_view).collect_view()}
+                {summen.into_iter().map(|z| summen_zeile_view(z, aktuell)).collect_view()}
             </tfoot>
         </table>
     }
@@ -440,7 +478,7 @@ pub fn MonatskostenSection() -> impl IntoView {
                 </div>
 
                 <p class="text-xs text-base-content/60">
-                    "Total Kosten = Ausgaben + Fixkosten. Saldo = Einnahmen + Fixeinnahmen − Total Kosten. Fixkosten und Fixeinnahmen sind nach Kategorie gruppiert; die Zeile einer Kategorie zeigt die Summe ihrer Posten je Monat. Ohne Kategorie steht ganz unten. Fixkosten und Fixeinnahmen zählen ab ihrem Beginnmonat, solange sie nicht beendet sind. Vierteljährliche, halbjährliche und jährliche Zahlungen werden auf den Monat umgerechnet. Ein Strich (–) bedeutet: In diesem Monat fällt dafür nichts an. Ab dem aktuellen Monat zeigt die Tabelle nur die Fixkosten und Fixeinnahmen als Prognose."
+                    "Total Kosten = Ausgaben + Fixkosten. Saldo = Einnahmen + Fixeinnahmen − Total Kosten. Fixkosten und Fixeinnahmen sind nach Kategorie gruppiert; die Zeile einer Kategorie zeigt die Summe ihrer Posten je Monat. Ohne Kategorie steht ganz unten. Der laufende Monat ist hervorgehoben. Fixkosten und Fixeinnahmen zählen ab ihrem Beginnmonat, solange sie nicht beendet sind. Vierteljährliche, halbjährliche und jährliche Zahlungen werden auf den Monat umgerechnet. Ein Strich (–) bedeutet: In diesem Monat fällt dafür nichts an. Ab dem aktuellen Monat zeigt die Tabelle nur die Fixkosten und Fixeinnahmen als Prognose."
                 </p>
             </div>
         </section>
