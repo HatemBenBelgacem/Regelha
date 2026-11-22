@@ -1079,6 +1079,8 @@ pub struct MonatsKosten {
     /// Einnahmen (Buchungen) + Fixeinnahmen - Total Kosten
     pub saldo: f64,
     pub anzahl_buchungen: usize,
+    /// Ist dies der laufende Monat? (Für die Hervorhebung in der Übersicht)
+    pub ist_aktueller_monat: bool,
 }
 
 /// Gruppiert Buchungen nach Monat und rechnet die monatlichen Fixkosten und Fixeinnahmen dazu.
@@ -1148,6 +1150,7 @@ pub fn berechne_monatskosten(
                 total_kosten,
                 saldo: einnahmen + summe_fixeinnahmen - total_kosten,
                 anzahl_buchungen,
+                ist_aktueller_monat: monat == bis.month(),
             }
         })
         .collect()
@@ -1360,5 +1363,8 @@ mod tests {
         assert_eq!(zeilen[0].monat_name, "Januar 2026");
         assert_eq!(zeilen[11].monat_name, "Dezember 2026");
         assert!(zeilen.iter().all(|z| z.total_kosten == 0.0));
+        // Nur November (Monat von `bis`) ist der aktuelle Monat
+        assert_eq!(zeilen.iter().filter(|z| z.ist_aktueller_monat).count(), 1);
+        assert!(zeilen[10].ist_aktueller_monat);
     }
 }
