@@ -27,7 +27,7 @@ pub async fn init_db_pool() -> Option<PgPool> {
                 if let Err(err) = run_schema_init(&pool).await {
                     log!("Warnung: Tabellen konnten nicht initialisiert werden: {err}");
                 } else {
-                    log!("PostgreSQL-Verbindung und Tabellen (benutzer, buchungen, fixkosten, aufgaben, kontakte, schulden, schuldenpositionen, chat, rel_benutzer_chat, nachricht) bereit.");
+                    log!("PostgreSQL-Verbindung und Tabellen (benutzer, buchungen, fixkosten, kategorien, aufgaben, kontakte, schulden, schuldenpositionen, chat, rel_benutzer_chat, nachricht) bereit.");
                 }
                 Some(pool)
             }
@@ -206,6 +206,37 @@ async fn run_schema_init(pool: &PgPool) -> Result<(), sqlx::Error> {
         "ALTER TABLE fixkosten ADD COLUMN IF NOT EXISTS kuendigungsfrist_monate INTEGER NOT NULL DEFAULT 0;",
         "ALTER TABLE fixkosten ADD COLUMN IF NOT EXISTS zahlungsperiode TEXT NOT NULL DEFAULT 'Monatlich';",
         "ALTER TABLE fixkosten ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'Aktiv';",
+    ] {
+        sqlx::query(statement).execute(pool).await?;
+    }
+
+    // 3b. Tabelle `kategorien` (Felder: name) mit N:1-Relation zur Tabelle `benutzer`.
+    // Kategorien werden in den Einstellungen verwaltet und ordnen Fixkosten und Fixeinnahmen zu.
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS kategorien (
+            id UUID PRIMARY KEY,
+            name TEXT NOT NULL,
+            benutzer_id UUID NOT NULL REFERENCES benutzer(id) ON DELETE CASCADE
+        );
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
+    // Pro Benutzer gibt es jeden Namen nur einmal (Groß- und Kleinschreibung egal)
+    sqlx::query(
+        "CREATE UNIQUE INDEX IF NOT EXISTS kategorien_benutzer_name_uidx ON kategorien (benutzer_id, LOWER(name));",
+    )
+    .execute(pool)
+    .await?;
+
+    // Fixkosten erhalten eine Art (Ausgabe = Fixkosten, Einnahme = Fixeinnahme) und optional eine Kategorie.
+    // Bestehende Einträge werden zu Ausgaben ohne Kategorie. ON DELETE RESTRICT: Eine verwendete Kategorie kann nicht gelöscht werden.
+    for statement in [
+        "ALTER TABLE fixkosten ADD COLUMN IF NOT EXISTS art TEXT NOT NULL DEFAULT 'Ausgabe';",
+        "ALTER TABLE fixkosten ADD COLUMN IF NOT EXISTS kategorie_id UUID REFERENCES kategorien(id) ON DELETE RESTRICT;",
+        "CREATE INDEX IF NOT EXISTS fixkosten_kategorie_id_idx ON fixkosten (kategorie_id);",
     ] {
         sqlx::query(statement).execute(pool).await?;
     }

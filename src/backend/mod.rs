@@ -5,6 +5,7 @@ pub mod chat;
 #[cfg(feature = "ssr")]
 pub mod db;
 pub mod fasten;
+pub mod kategorien;
 pub mod kontakte;
 pub mod push;
 pub mod rueckzahlungen;
@@ -32,6 +33,12 @@ pub fn register_server_functions() {
     register_explicit::<budget::UpdateFixkostenStatus>();
     register_explicit::<budget::DeleteFixkosten>();
     register_explicit::<budget::GetMonatskosten>();
+
+    // Kategorien Server Functions (Einstellungen)
+    register_explicit::<kategorien::GetKategorien>();
+    register_explicit::<kategorien::AddKategorie>();
+    register_explicit::<kategorien::UpdateKategorie>();
+    register_explicit::<kategorien::DeleteKategorie>();
 
     // Aufgaben Server Functions
     register_explicit::<aufgaben::GetAufgaben>();
