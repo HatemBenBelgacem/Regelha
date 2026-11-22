@@ -3,6 +3,7 @@ use leptos::prelude::*;
 use uuid::Uuid;
 
 use crate::backend::budget::{get_monatskosten, FixkostenPosten, MonatsKosten};
+use crate::backend::kategorien::{get_kategorien, kategorie_name, Kategorie};
 
 /// Formatiert einen Saldo mit Vorzeichen (z.B. "+ CHF 12.00" / "- CHF 3.50").
 fn saldo_text(saldo: f64) -> String {
@@ -56,6 +57,16 @@ struct PostenZeile {
     summe: Zelle,
 }
 
+/// Eine Kategorie mit ihren Posten. Die Zellen der Kategorie zeigen die Summe ihrer Posten je Monat.
+struct Gruppe {
+    titel: String,
+    /// Ohne Kategorie steht die Gruppe ganz unten
+    ohne_kategorie: bool,
+    zeilen: Vec<PostenZeile>,
+    zellen: Vec<Zelle>,
+    summe: Zelle,
+}
+
 /// Eine Summenzeile unter der Tabelle (Einnahmen, Ausgaben, Total, Saldo).
 struct SummenZeile {
     titel: &'static str,
@@ -101,35 +112,82 @@ fn betrag_im_monat(posten: &[FixkostenPosten], id: Uuid) -> Option<f64> {
     posten.iter().find(|p| p.id == id).map(|p| p.monatsbetrag)
 }
 
-/// Baut die Zeilen für Fixkosten oder Fixeinnahmen. `praefix` steht vor der Zahlungsperiode in der Unterzeile.
-fn posten_zeilen(
+/// Die Zeile eines Postens mit seinem Betrag in jedem Monat.
+fn posten_zeile(
+    posten: &FixkostenPosten,
     monate: &[MonatsKosten],
+    auswahl: &impl Fn(&MonatsKosten) -> &[FixkostenPosten],
+    farben: Farben,
+) -> PostenZeile {
+    let werte: Vec<Option<f64>> = monate
+        .iter()
+        .map(|m| betrag_im_monat(auswahl(m), posten.id))
+        .collect();
+    let summe: f64 = werte.iter().flatten().sum();
+    PostenZeile {
+        titel: posten.buchungstext.clone(),
+        untertitel: posten.zahlungsperiode.label().to_string(),
+        zellen: werte.into_iter().map(|w| posten_zelle(w, farben)).collect(),
+        summe: Zelle {
+            text: betrag_text(summe),
+            klasse: farben.summe,
+        },
+    }
+}
+
+/// Gruppiert die Posten nach Kategorie. Die Kategorien stehen nach Name sortiert, "Ohne Kategorie" am Ende.
+fn gruppen(
+    monate: &[MonatsKosten],
+    kategorien: &[Kategorie],
     auswahl: impl Fn(&MonatsKosten) -> &[FixkostenPosten],
     farben: Farben,
-    praefix: &'static str,
-) -> Vec<PostenZeile> {
-    posten_eindeutig(monate, &auswahl)
+) -> Vec<Gruppe> {
+    let posten = posten_eindeutig(monate, &auswahl);
+
+    // Alle vorkommenden Kategorien (None = ohne Kategorie)
+    let mut ids: Vec<Option<Uuid>> = Vec::new();
+    for p in &posten {
+        if !ids.contains(&p.kategorie_id) {
+            ids.push(p.kategorie_id);
+        }
+    }
+
+    let mut gruppen: Vec<Gruppe> = ids
         .into_iter()
-        .map(|posten| {
+        .map(|id| {
+            let mitglieder: Vec<&FixkostenPosten> =
+                posten.iter().filter(|p| p.kategorie_id == id).collect();
+            let zeilen: Vec<PostenZeile> = mitglieder
+                .iter()
+                .map(|p| posten_zeile(p, monate, &auswahl, farben))
+                .collect();
+            // Summe der Kategorie je Monat. Ohne Betrag in diesem Monat steht ein Strich.
             let werte: Vec<Option<f64>> = monate
                 .iter()
-                .map(|m| betrag_im_monat(auswahl(m), posten.id))
+                .map(|m| {
+                    let betraege: Vec<f64> = mitglieder
+                        .iter()
+                        .filter_map(|p| betrag_im_monat(auswahl(m), p.id))
+                        .collect();
+                    (!betraege.is_empty()).then(|| betraege.iter().sum::<f64>())
+                })
                 .collect();
             let summe: f64 = werte.iter().flatten().sum();
-            PostenZeile {
-                titel: posten.buchungstext,
-                untertitel: format!("{praefix}{}", posten.zahlungsperiode.label()),
-                zellen: werte
-                    .into_iter()
-                    .map(|w| posten_zelle(w, farben))
-                    .collect(),
+            Gruppe {
+                titel: kategorie_name(kategorien, id),
+                ohne_kategorie: id.is_none(),
+                zeilen,
+                zellen: werte.into_iter().map(|w| posten_zelle(w, farben)).collect(),
                 summe: Zelle {
                     text: betrag_text(summe),
                     klasse: farben.summe,
                 },
             }
         })
-        .collect()
+        .collect();
+
+    gruppen.sort_by_key(|g| (g.ohne_kategorie, g.titel.to_lowercase()));
+    gruppen
 }
 
 /// Baut eine Summenzeile. Die Farbe kann von jedem Wert abhängen (z.B. beim Saldo).
@@ -174,11 +232,12 @@ fn kopf_view((name, anzahl): (String, String)) -> impl IntoView {
     }
 }
 
+/// Eine Posten-Zeile. Sie ist unter ihrer Kategorie eingerückt.
 fn posten_zeile_view(zeile: PostenZeile) -> impl IntoView {
     let PostenZeile { titel, untertitel, zellen, summe } = zeile;
     view! {
         <tr>
-            <td class="sticky left-0 z-10 bg-base-100 whitespace-nowrap font-medium">
+            <td class="sticky left-0 z-10 bg-base-100 whitespace-nowrap font-medium pl-6">
                 <div class="flex flex-col">
                     <span>{titel}</span>
                     <span class="text-xs font-normal text-base-content/50">{untertitel}</span>
@@ -188,6 +247,36 @@ fn posten_zeile_view(zeile: PostenZeile) -> impl IntoView {
             {zelle_view(summe)}
         </tr>
     }
+}
+
+/// Eine Kategorie: zuerst die Summenzeile der Kategorie, darunter ihre Posten.
+fn gruppe_view(gruppe: Gruppe) -> impl IntoView {
+    let Gruppe { titel, zeilen, zellen, summe, .. } = gruppe;
+    view! {
+        <tr class="font-semibold bg-base-200/60">
+            <td class="sticky left-0 z-10 bg-base-200 whitespace-nowrap">{titel}</td>
+            {zellen.into_iter().map(zelle_view).collect_view()}
+            {zelle_view(summe)}
+        </tr>
+        {zeilen.into_iter().map(posten_zeile_view).collect_view()}
+    }
+}
+
+/// Ein Abschnitt der Tabelle ("Fixkosten" oder "Fixeinnahmen") mit allen Kategorien.
+/// Ohne Posten in diesem Abschnitt bleibt er leer.
+fn abschnitt_view(titel: &'static str, gruppen: Vec<Gruppe>, spalten: String) -> AnyView {
+    if gruppen.is_empty() {
+        return ().into_any();
+    }
+    view! {
+        <tr class="bg-base-300/40">
+            <td colspan=spalten class="font-bold text-xs uppercase tracking-wide text-base-content/80">
+                {titel}
+            </td>
+        </tr>
+        {gruppen.into_iter().map(gruppe_view).collect_view()}
+    }
+    .into_any()
 }
 
 fn summen_zeile_view(zeile: SummenZeile) -> impl IntoView {
@@ -206,19 +295,19 @@ fn summen_zeile_view(zeile: SummenZeile) -> impl IntoView {
     }
 }
 
-/// Die Tabelle: Monate als Spalten, Fixkosten und Fixeinnahmen als Zeilen, unten die Summen.
-fn monatstabelle(monate: Vec<MonatsKosten>) -> impl IntoView {
-    let ausgaben_zeilen = posten_zeilen(
+/// Die Tabelle: Monate als Spalten. Fixkosten und Fixeinnahmen stehen je nach Kategorie gruppiert, unten die Summen.
+fn monatstabelle(monate: Vec<MonatsKosten>, kategorien: Vec<Kategorie>) -> impl IntoView {
+    let ausgaben = gruppen(
         &monate,
+        &kategorien,
         |m| m.fixkosten_posten.as_slice(),
         FARBEN_AUSGABEN,
-        "",
     );
-    let einnahmen_zeilen = posten_zeilen(
+    let einnahmen = gruppen(
         &monate,
+        &kategorien,
         |m| m.fixeinnahmen_posten.as_slice(),
         FARBEN_EINNAHMEN,
-        "Fixeinnahme · ",
     );
 
     // Der Durchschnitt zählt nur Monate bis heute. Zukunftsmonate enthalten nur die Prognose.
@@ -278,8 +367,9 @@ fn monatstabelle(monate: Vec<MonatsKosten>) -> impl IntoView {
         .iter()
         .map(|m| (m.monat_name.clone(), format!("{} Buchungen", m.anzahl_buchungen)))
         .collect();
-    let leer = ausgaben_zeilen.is_empty() && einnahmen_zeilen.is_empty();
+    let leer = ausgaben.is_empty() && einnahmen.is_empty();
     let colspan = (monate.len() + 2).to_string();
+    let colspan_leer = colspan.clone();
 
     view! {
         <table class="table table-zebra table-xs w-full">
@@ -293,13 +383,13 @@ fn monatstabelle(monate: Vec<MonatsKosten>) -> impl IntoView {
             <tbody>
                 {leer.then(move || view! {
                     <tr>
-                        <td colspan=colspan class="text-center text-base-content/60">
+                        <td colspan=colspan_leer class="text-center text-base-content/60">
                             "Keine Fixkosten oder Fixeinnahmen erfasst"
                         </td>
                     </tr>
                 })}
-                {ausgaben_zeilen.into_iter().map(posten_zeile_view).collect_view()}
-                {einnahmen_zeilen.into_iter().map(posten_zeile_view).collect_view()}
+                {abschnitt_view("Fixkosten", ausgaben, colspan.clone())}
+                {abschnitt_view("Fixeinnahmen", einnahmen, colspan)}
             </tbody>
             <tfoot>
                 {summen.into_iter().map(summen_zeile_view).collect_view()}
@@ -311,6 +401,7 @@ fn monatstabelle(monate: Vec<MonatsKosten>) -> impl IntoView {
 #[component]
 pub fn MonatskostenSection() -> impl IntoView {
     let monate_resource = Resource::new(|| (), |_| get_monatskosten());
+    let kategorien_resource = Resource::new(|| (), |_| get_kategorien());
 
     view! {
         <section class="card bg-base-100 shadow-sm border border-base-300">
@@ -318,7 +409,7 @@ pub fn MonatskostenSection() -> impl IntoView {
                 <div>
                     <h2 class="card-title text-lg sm:text-xl">"Kosten pro Monat"</h2>
                     <p class="text-xs sm:text-sm text-base-content/70">
-                        "Übersicht über das ganze Jahr: Einnahmen, Ausgaben, Fixkosten und Fixeinnahmen in CHF"
+                        "Übersicht über das ganze Jahr: Einnahmen, Ausgaben, Fixkosten und Fixeinnahmen nach Kategorien in CHF"
                     </p>
                 </div>
 
@@ -329,20 +420,27 @@ pub fn MonatskostenSection() -> impl IntoView {
                         </div>
                     }>
                         {move || {
-                            monate_resource.get().map(|res| match res {
-                                Ok(monate) => monatstabelle(monate).into_any(),
-                                Err(err) => view! {
+                            let kategorien = kategorien_resource.get();
+                            monate_resource.get().map(|res| match (res, kategorien) {
+                                (Ok(monate), Some(Ok(kategorien))) => monatstabelle(monate, kategorien).into_any(),
+                                (Err(err), _) => view! {
                                     <div class="alert alert-error">
                                         <span>{format!("Fehler beim Laden der Monatsübersicht: {err}")}</span>
                                     </div>
                                 }.into_any(),
+                                (_, Some(Err(err))) => view! {
+                                    <div class="alert alert-error">
+                                        <span>{format!("Fehler beim Laden der Kategorien: {err}")}</span>
+                                    </div>
+                                }.into_any(),
+                                _ => ().into_any(),
                             })
                         }}
                     </Suspense>
                 </div>
 
                 <p class="text-xs text-base-content/60">
-                    "Total Kosten = Ausgaben + Fixkosten. Saldo = Einnahmen + Fixeinnahmen − Total Kosten. Fixkosten und Fixeinnahmen zählen ab ihrem Beginnmonat, solange sie nicht beendet sind. Vierteljährliche, halbjährliche und jährliche Zahlungen werden auf den Monat umgerechnet. Ein Strich (–) bedeutet: In diesem Monat fällt für diesen Posten nichts an. Ab dem aktuellen Monat zeigt die Tabelle nur die Fixkosten und Fixeinnahmen als Prognose."
+                    "Total Kosten = Ausgaben + Fixkosten. Saldo = Einnahmen + Fixeinnahmen − Total Kosten. Fixkosten und Fixeinnahmen sind nach Kategorie gruppiert; die Zeile einer Kategorie zeigt die Summe ihrer Posten je Monat. Ohne Kategorie steht ganz unten. Fixkosten und Fixeinnahmen zählen ab ihrem Beginnmonat, solange sie nicht beendet sind. Vierteljährliche, halbjährliche und jährliche Zahlungen werden auf den Monat umgerechnet. Ein Strich (–) bedeutet: In diesem Monat fällt dafür nichts an. Ab dem aktuellen Monat zeigt die Tabelle nur die Fixkosten und Fixeinnahmen als Prognose."
                 </p>
             </div>
         </section>
