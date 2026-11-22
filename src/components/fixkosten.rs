@@ -7,7 +7,7 @@ use crate::backend::budget::{
     update_fixkosten_status, FixkostenArt, FixkostenDaten, FixkostenEintrag, FixkostenStatus,
     Zahlungsperiode,
 };
-use crate::backend::kategorien::{get_kategorien, Kategorie};
+use crate::backend::kategorien::{get_kategorien, kategorie_name};
 use crate::components::modal::Modal;
 
 /// Auswahlmöglichkeiten für die Kündigungsfrist (in Monaten)
@@ -34,13 +34,6 @@ fn modal_titel(art: FixkostenArt, bearbeiten: bool) -> String {
         (FixkostenArt::Einnahme, false) => "Neue Fixeinnahme".to_string(),
         (FixkostenArt::Einnahme, true) => "Fixeinnahme bearbeiten".to_string(),
     }
-}
-
-/// Name der Kategorie zu einer Id. Ohne Kategorie steht dort "Ohne Kategorie".
-fn kategorie_name(kategorien: &[Kategorie], id: Option<Uuid>) -> String {
-    id.and_then(|id| kategorien.iter().find(|k| k.id == id))
-        .map(|k| k.name.clone())
-        .unwrap_or_else(|| "Ohne Kategorie".to_string())
 }
 
 #[component]

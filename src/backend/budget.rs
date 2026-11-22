@@ -1007,6 +1007,8 @@ pub struct FixkostenPosten {
     pub zahlungsperiode: Zahlungsperiode,
     /// Auf einen Monat umgerechneter Betrag in CHF
     pub monatsbetrag: f64,
+    /// Kategorie des Postens; None = ohne Kategorie
+    pub kategorie_id: Option<Uuid>,
 }
 
 /// Eine Zeile der Monatsübersicht (Kosten pro Monat).
@@ -1064,6 +1066,7 @@ pub fn berechne_monatskosten(
                 buchungstext: f.buchungstext.clone(),
                 zahlungsperiode: f.zahlungsperiode,
                 monatsbetrag: f.monatsbetrag(),
+                kategorie_id: f.kategorie_id,
             };
             let aktive: Vec<&FixkostenEintrag> = fixkosten
                 .iter()
@@ -1253,6 +1256,22 @@ mod tests {
 
         // Die Ausgaben aus 2025 sind nicht enthalten
         assert_eq!(zeilen.iter().map(|z| z.ausgaben).sum::<f64>(), 0.0);
+    }
+
+    #[test]
+    fn posten_tragen_ihre_kategorie() {
+        let kategorie = Uuid::from_u128(7);
+        let mut miete = fixkosten(980.0, (2024, 1, 1), Zahlungsperiode::Monatlich, FixkostenStatus::Aktiv);
+        miete.kategorie_id = Some(kategorie);
+        let ohne = fixkosten(10.0, (2024, 1, 1), Zahlungsperiode::Monatlich, FixkostenStatus::Aktiv);
+        let bis = NaiveDate::from_ymd_opt(2026, 1, 15).unwrap();
+        let zeilen = berechne_monatskosten(&[], &[miete.clone(), ohne.clone()], bis);
+
+        let posten = &zeilen[0].fixkosten_posten;
+        let miete_posten = posten.iter().find(|p| p.id == miete.id).unwrap();
+        let ohne_posten = posten.iter().find(|p| p.id == ohne.id).unwrap();
+        assert_eq!(miete_posten.kategorie_id, Some(kategorie));
+        assert_eq!(ohne_posten.kategorie_id, None);
     }
 
     #[test]

@@ -11,6 +11,13 @@ pub struct Kategorie {
     pub benutzer_id: Uuid,
 }
 
+/// Anzeigename einer Kategorie zu einer Id. Ohne Kategorie (oder bei unbekannter Id) steht dort "Ohne Kategorie".
+pub fn kategorie_name(kategorien: &[Kategorie], id: Option<Uuid>) -> String {
+    id.and_then(|id| kategorien.iter().find(|k| k.id == id))
+        .map(|k| k.name.clone())
+        .unwrap_or_else(|| "Ohne Kategorie".to_string())
+}
+
 #[cfg(feature = "ssr")]
 const KATEGORIE_HAT_EINTRAEGE: &str =
     "Diese Kategorie wird noch von Fixkosten oder Fixeinnahmen verwendet und kann nicht gelöscht werden.";
