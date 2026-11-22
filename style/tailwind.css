@@ -11,6 +11,8 @@
   --color-regelha-petrol: #004445;      /* Cadet Blue: Primärfarbe (Kopfzeile, Buttons, Aktiv) */
   --color-regelha-regen: #2C7873;       /* Rain: Sekundärfarbe, Hover, Hinweise */
   --color-regelha-gruen: #6FB98F;       /* Greenery: Akzent (Statuspunkt, Hervorhebung) */
+  /* Balken im Dashboard: Teal-Stufe der Marke, geprüft mit dem Dataviz-Validator (Helligkeit, Farbigkeit, Kontrast auf Weiß) */
+  --color-regelha-diagramm: #00918A;
 }
 
 :root,

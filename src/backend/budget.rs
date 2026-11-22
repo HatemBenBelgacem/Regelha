@@ -5,6 +5,8 @@ use leptos::prelude::*;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::backend::kategorien::{kategorie_name, Kategorie};
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum BuchungsArt {
     Eingang,
@@ -244,6 +246,46 @@ pub struct DashboardKennzahlen {
     pub einnahmen_aktueller_monat: f64,
     pub summe_fixkosten: f64,
     pub voraussichtliche_gesamtausgaben_inkl_fixkosten: f64,
+    /// Fixkosten des Monats je Kategorie, absteigend nach Betrag (für das Säulendiagramm)
+    pub fixkosten_pro_kategorie: Vec<KategorieSumme>,
+}
+
+/// Fixkosten eines Monats für eine Kategorie (Summe der Monatsbeträge). `kategorie_id` None = ohne Kategorie.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct KategorieSumme {
+    pub kategorie_id: Option<Uuid>,
+    pub name: String,
+    pub betrag: f64,
+}
+
+/// Summiert die Fixkosten eines Monats nach Kategorie. Fixeinnahmen zählen nicht.
+/// Die Liste ist nach Betrag absteigend sortiert, bei Gleichstand nach Name.
+pub fn berechne_kategorie_summen(
+    fixkosten: &[FixkostenEintrag],
+    kategorien: &[Kategorie],
+    jahr: i32,
+    monat: u32,
+) -> Vec<KategorieSumme> {
+    let mut summen: Vec<KategorieSumme> = Vec::new();
+    for f in fixkosten
+        .iter()
+        .filter(|f| !f.ist_einnahme() && f.zaehlt_im_monat(jahr, monat))
+    {
+        match summen.iter_mut().find(|s| s.kategorie_id == f.kategorie_id) {
+            Some(s) => s.betrag += f.monatsbetrag(),
+            None => summen.push(KategorieSumme {
+                kategorie_id: f.kategorie_id,
+                name: kategorie_name(kategorien, f.kategorie_id),
+                betrag: f.monatsbetrag(),
+            }),
+        }
+    }
+    summen.sort_by(|a, b| {
+        b.betrag
+            .total_cmp(&a.betrag)
+            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+    });
+    summen
 }
 
 /// Berechnet die Anzahl der Tage eines gegebenen Monats und Jahres.
@@ -375,6 +417,7 @@ pub async fn get_dashboard_kennzahlen() -> Result<DashboardKennzahlen, ServerFnE
     // `get_buchungen` und `get_fixkosten` liefern ausschließlich die Einträge des angemeldeten Benutzers
     let buchungen = get_buchungen().await?;
     let fixkosten = get_fixkosten().await?;
+    let kategorien = crate::backend::kategorien::get_kategorien().await?;
 
     let today = Local::now().date_naive();
     let current_year = today.year();
@@ -435,6 +478,12 @@ pub async fn get_dashboard_kennzahlen() -> Result<DashboardKennzahlen, ServerFnE
         einnahmen_aktueller_monat,
         summe_fixkosten,
         voraussichtliche_gesamtausgaben_inkl_fixkosten,
+        fixkosten_pro_kategorie: berechne_kategorie_summen(
+            &fixkosten,
+            &kategorien,
+            current_year,
+            current_month,
+        ),
     })
 }
 
@@ -1272,6 +1321,35 @@ mod tests {
         let ohne_posten = posten.iter().find(|p| p.id == ohne.id).unwrap();
         assert_eq!(miete_posten.kategorie_id, Some(kategorie));
         assert_eq!(ohne_posten.kategorie_id, None);
+    }
+
+    #[test]
+    fn kategorie_summen_nur_fixkosten_des_monats() {
+        let wohnen = Uuid::from_u128(1);
+        let versicherung = Uuid::from_u128(2);
+        let kategorien = vec![
+            Kategorie { id: wohnen, name: "Wohnen".to_string(), benutzer_id: Uuid::nil() },
+            Kategorie { id: versicherung, name: "Versicherung".to_string(), benutzer_id: Uuid::nil() },
+        ];
+        let mut miete = fixkosten(980.0, (2024, 1, 1), Zahlungsperiode::Monatlich, FixkostenStatus::Aktiv);
+        miete.kategorie_id = Some(wohnen);
+        // 25,50 pro Quartal = 8,50 pro Monat
+        let mut haftpflicht = fixkosten(25.5, (2025, 6, 1), Zahlungsperiode::Vierteljaehrlich, FixkostenStatus::Aktiv);
+        haftpflicht.kategorie_id = Some(versicherung);
+        // Fixeinnahmen zählen nicht
+        let mut lohn = fixeinnahme(3000.0, (2024, 1, 1), Zahlungsperiode::Monatlich, FixkostenStatus::Aktiv);
+        lohn.kategorie_id = Some(wohnen);
+        let ohne = fixkosten(10.0, (2024, 1, 1), Zahlungsperiode::Monatlich, FixkostenStatus::Aktiv);
+        // Beendete Verträge zählen nicht
+        let mut alt = fixkosten(500.0, (2020, 1, 1), Zahlungsperiode::Monatlich, FixkostenStatus::Beendet);
+        alt.kategorie_id = Some(versicherung);
+
+        let summen = berechne_kategorie_summen(&[miete, haftpflicht, lohn, ohne, alt], &kategorien, 2026, 1);
+
+        assert_eq!(summen.len(), 3);
+        assert_eq!((summen[0].name.as_str(), summen[0].betrag), ("Wohnen", 980.0));
+        assert_eq!((summen[1].name.as_str(), summen[1].betrag), ("Ohne Kategorie", 10.0));
+        assert_eq!((summen[2].name.as_str(), summen[2].betrag), ("Versicherung", 8.5));
     }
 
     #[test]
