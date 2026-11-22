@@ -222,6 +222,18 @@ impl FixkostenEintrag {
         let beginn = (self.beginndatum.year(), self.beginndatum.month());
         self.status.verursacht_kosten() && beginn <= (jahr, monat)
     }
+
+    /// Wird dieser Eintrag im angegebenen Monat fällig (also bezahlt)?
+    /// Die Zahlung kommt im Beginnmonat und danach im Abstand der Zahlungsperiode:
+    /// monatlich jeden Monat, vierteljährlich alle 3 Monate, halbjährlich alle 6 Monate, jährlich alle 12 Monate.
+    pub fn faellig_im_monat(&self, jahr: i32, monat: u32) -> bool {
+        if !self.zaehlt_im_monat(jahr, monat) {
+            return false;
+        }
+        let beginn = self.beginndatum.year() * 12 + self.beginndatum.month() as i32;
+        let aktuell = jahr * 12 + monat as i32;
+        (aktuell - beginn) % self.zahlungsperiode.monate() as i32 == 0
+    }
 }
 
 /// Text für eine Kündigungsfrist in Monaten.
@@ -1054,8 +1066,8 @@ pub struct FixkostenPosten {
     pub id: Uuid,
     pub buchungstext: String,
     pub zahlungsperiode: Zahlungsperiode,
-    /// Auf einen Monat umgerechneter Betrag in CHF
-    pub monatsbetrag: f64,
+    /// Betrag in CHF, der in diesem Monat anfällt (volle Zahlung, nicht umgerechnet)
+    pub betrag: f64,
     /// Kategorie des Postens; None = ohne Kategorie
     pub kategorie_id: Option<Uuid>,
 }
@@ -1116,12 +1128,13 @@ pub fn berechne_monatskosten(
                 id: f.id,
                 buchungstext: f.buchungstext.clone(),
                 zahlungsperiode: f.zahlungsperiode,
-                monatsbetrag: f.monatsbetrag(),
+                betrag: f.betrag,
                 kategorie_id: f.kategorie_id,
             };
+            // Nur Posten, die in diesem Monat fällig sind. Die übrigen Monate zeigen einen Strich.
             let aktive: Vec<&FixkostenEintrag> = fixkosten
                 .iter()
-                .filter(|f| f.zaehlt_im_monat(jahr, monat))
+                .filter(|f| f.faellig_im_monat(jahr, monat))
                 .collect();
             let fixkosten_posten: Vec<FixkostenPosten> = aktive
                 .iter()
@@ -1133,8 +1146,8 @@ pub fn berechne_monatskosten(
                 .filter(|f| f.ist_einnahme())
                 .map(|f| posten(f))
                 .collect();
-            let summe_fixkosten: f64 = fixkosten_posten.iter().map(|p| p.monatsbetrag).sum();
-            let summe_fixeinnahmen: f64 = fixeinnahmen_posten.iter().map(|p| p.monatsbetrag).sum();
+            let summe_fixkosten: f64 = fixkosten_posten.iter().map(|p| p.betrag).sum();
+            let summe_fixeinnahmen: f64 = fixeinnahmen_posten.iter().map(|p| p.betrag).sum();
             let total_kosten = ausgaben + summe_fixkosten;
 
             MonatsKosten {
@@ -1263,10 +1276,11 @@ mod tests {
         let bis = NaiveDate::from_ymd_opt(2026, 1, 15).unwrap();
         let zeilen = berechne_monatskosten(&[], &liste, bis);
 
-        // Januar 2026: 1000 + 1200/12, beendeter Vertrag zählt nicht
-        assert_eq!(zeilen[0].fixkosten, 1100.0);
-        // Zwei Verträge zählen im Januar 2026: der monatliche und der jährliche (anteilig)
-        assert_eq!(zeilen[0].fixkosten_posten.len(), 2);
+        // Januar 2026: nur der monatliche Vertrag. Der jährliche zahlt erst im Dezember, der beendete zählt nicht
+        assert_eq!(zeilen[0].fixkosten, 1000.0);
+        assert_eq!(zeilen[0].fixkosten_posten.len(), 1);
+        // Dezember 2026: monatlich 1000 plus die volle Jahreszahlung 1200
+        assert_eq!(zeilen[11].fixkosten, 2200.0);
         // Die Liste zeigt nur das Jahr 2026, also kein November 2025
         let nov = zeilen.iter().find(|z| (z.jahr, z.monat) == (2025, 11));
         assert!(nov.is_none(), "die Liste umfasst nur das Jahr von `bis`");
@@ -1276,6 +1290,41 @@ mod tests {
         assert!(!liste[1].zaehlt_im_monat(2025, 11));
         assert!(liste[1].zaehlt_im_monat(2025, 12));
         assert!(!liste[2].zaehlt_im_monat(2026, 1));
+    }
+
+    #[test]
+    fn zahlungen_fallen_nur_in_ihren_monaten_an() {
+        let bis = NaiveDate::from_ymd_opt(2026, 1, 15).unwrap();
+        let monatlich = fixkosten(100.0, (2025, 1, 1), Zahlungsperiode::Monatlich, FixkostenStatus::Aktiv);
+        // Vierteljährlich ab Juni 2025: 2026 im März, Juni, September und Dezember
+        let vierteljaehrlich = fixkosten(25.5, (2025, 6, 1), Zahlungsperiode::Vierteljaehrlich, FixkostenStatus::Aktiv);
+        // Halbjährlich ab März 2025: 2026 im März und September
+        let halbjaehrlich = fixkosten(300.0, (2025, 3, 1), Zahlungsperiode::Halbjaehrlich, FixkostenStatus::Aktiv);
+        // Jährlich ab März 2025: 2026 nur im März
+        let jaehrlich = fixkosten(1200.0, (2025, 3, 1), Zahlungsperiode::Jaehrlich, FixkostenStatus::Aktiv);
+        let liste = vec![monatlich.clone(), vierteljaehrlich.clone(), halbjaehrlich.clone(), jaehrlich.clone()];
+        let zeilen = berechne_monatskosten(&[], &liste, bis);
+
+        // Monatsnummern (1 = Januar), in denen ein Vertrag Kosten verursacht
+        let monate_von = |id: Uuid| -> Vec<u32> {
+            zeilen
+                .iter()
+                .filter(|z| z.fixkosten_posten.iter().any(|p| p.id == id))
+                .map(|z| z.monat)
+                .collect()
+        };
+        assert_eq!(monate_von(monatlich.id).len(), 12);
+        assert_eq!(monate_von(vierteljaehrlich.id), vec![3, 6, 9, 12]);
+        assert_eq!(monate_von(halbjaehrlich.id), vec![3, 9]);
+        assert_eq!(monate_von(jaehrlich.id), vec![3]);
+
+        // Der volle Betrag fällt in seinem Monat an, nicht anteilig
+        let jaehrlicher_posten = zeilen[2].fixkosten_posten.iter().find(|p| p.id == jaehrlich.id).unwrap();
+        assert_eq!(jaehrlicher_posten.betrag, 1200.0);
+        // März: monatlich 100 + vierteljährlich 25.5 + halbjährlich 300 + jährlich 1200
+        assert_eq!(zeilen[2].fixkosten, 1625.5);
+        // Januar: nur der monatliche Vertrag
+        assert_eq!(zeilen[0].fixkosten, 100.0);
     }
 
     #[test]

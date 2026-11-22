@@ -110,7 +110,7 @@ fn posten_eindeutig(
 
 /// Betrag eines Postens in einem Monat. `None`, wenn in diesem Monat nichts anfällt.
 fn betrag_im_monat(posten: &[FixkostenPosten], id: Uuid) -> Option<f64> {
-    posten.iter().find(|p| p.id == id).map(|p| p.monatsbetrag)
+    posten.iter().find(|p| p.id == id).map(|p| p.betrag)
 }
 
 /// Die Zeile eines Postens mit seinem Betrag in jedem Monat.
@@ -478,7 +478,7 @@ pub fn MonatskostenSection() -> impl IntoView {
                 </div>
 
                 <p class="text-xs text-base-content/60">
-                    "Total Kosten = Ausgaben + Fixkosten. Saldo = Einnahmen + Fixeinnahmen − Total Kosten. Fixkosten und Fixeinnahmen sind nach Kategorie gruppiert; die Zeile einer Kategorie zeigt die Summe ihrer Posten je Monat. Ohne Kategorie steht ganz unten. Der laufende Monat ist hervorgehoben. Fixkosten und Fixeinnahmen zählen ab ihrem Beginnmonat, solange sie nicht beendet sind. Vierteljährliche, halbjährliche und jährliche Zahlungen werden auf den Monat umgerechnet. Ein Strich (–) bedeutet: In diesem Monat fällt dafür nichts an. Ab dem aktuellen Monat zeigt die Tabelle nur die Fixkosten und Fixeinnahmen als Prognose."
+                    "Total Kosten = Ausgaben + Fixkosten. Saldo = Einnahmen + Fixeinnahmen − Total Kosten. Fixkosten und Fixeinnahmen sind nach Kategorie gruppiert; die Zeile einer Kategorie zeigt die Summe ihrer Posten je Monat. Ohne Kategorie steht ganz unten. Der laufende Monat ist hervorgehoben. Fixkosten und Fixeinnahmen zählen ab ihrem Beginnmonat, solange sie nicht beendet sind. Vierteljährliche Zahlungen erscheinen alle 3 Monate, halbjährliche alle 6 Monate und jährliche nur einmal im Jahr, jeweils ab dem Beginnmonat und mit dem vollen Betrag. Ein Strich (–) bedeutet: In diesem Monat fällt dafür nichts an. Ab dem aktuellen Monat zeigt die Tabelle nur die Fixkosten und Fixeinnahmen als Prognose."
                 </p>
             </div>
         </section>
