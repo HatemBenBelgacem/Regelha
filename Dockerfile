@@ -1,7 +1,8 @@
 # =============================================================================
-# Stage 1: Builder (Rust + cargo-leptos + Node.js für Tailwind CSS v4 & DaisyUI)
+# Stage 1: chef – Rust + Node.js 22 + cargo-leptos + cargo-chef
+# (ändert sich selten, bleibt deshalb lange im Cache)
 # =============================================================================
-FROM rustlang/rust:nightly-bookworm AS builder
+FROM rustlang/rust:nightly-bookworm AS chef
 
 # System-Abhängigkeiten + Node.js 22 (Tailwind CSS v4 benötigt Node >= 20) installieren
 RUN apt-get update && apt-get install -y \
@@ -14,18 +15,44 @@ RUN apt-get update && apt-get install -y \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-# WASM-Target und cargo-leptos (vorab kompiliertes Binary via cargo-binstall) installieren
+# WASM-Target installieren
 RUN rustup target add wasm32-unknown-unknown
+
+# cargo-leptos und cargo-chef (vorab kompiliertes Binary via cargo-binstall, sonst aus dem Quellcode)
 RUN curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash \
-    && cargo binstall cargo-leptos -y --force || cargo install --locked cargo-leptos
+    && cargo binstall cargo-leptos cargo-chef -y --force || cargo install --locked cargo-leptos cargo-chef
 
 WORKDIR /app
+
+# =============================================================================
+# Stage 2: planner – erstellt recipe.json mit allen Abhängigkeiten.
+# Das Rezept ändert sich nur, wenn Cargo.toml oder Cargo.lock sich ändern,
+# nicht bei jeder Code-Änderung.
+# =============================================================================
+FROM chef AS planner
+COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
+
+# =============================================================================
+# Stage 3: builder – Abhängigkeiten vorab bauen, dann Fullstack Release-Build
+# =============================================================================
+FROM chef AS builder
+
+# Abhängigkeiten vorab kompilieren (bleibt im Cache, solange sich das Rezept nicht ändert).
+# Die Flags entsprechen dem, was `cargo leptos build --release` verwendet
+# (bin-features = ssr, lib-features = hydrate, lib-profile-release = wasm-release in Cargo.toml).
+# Weicht ein Flag ab, baut cargo die Abhängigkeiten später trotzdem neu.
+#  - Server:        Profil release, Feature ssr
+#  - WASM-Client:   Profil wasm-release, Target wasm32-unknown-unknown, Feature hydrate
+COPY --from=planner /app/recipe.json recipe.json
+RUN cargo chef cook --release --no-default-features --features ssr --recipe-path recipe.json
+RUN cargo chef cook --profile wasm-release --target wasm32-unknown-unknown --no-default-features --features hydrate --recipe-path recipe.json
 
 # Node-Abhängigkeiten (Tailwind CSS v4 & DaisyUI v5) installieren
 COPY package.json package-lock.json* ./
 RUN npm install --ignore-scripts
 
-# Projektdateien kopieren
+# Projektdateien kopieren (erst jetzt, damit Code-Änderungen die vorab gebauten Abhängigkeiten nicht neu auslösen)
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
 COPY style ./style
@@ -38,7 +65,7 @@ ENV PATH="/app/node_modules/.bin:${PATH}"
 RUN cargo leptos build --release -vv
 
 # =============================================================================
-# Stage 2: Runtime (Schlankes Produktions-Image für Railway)
+# Stage 4: Runtime (Schlankes Produktions-Image für Railway)
 # =============================================================================
 FROM debian:bookworm-slim AS runtime
 
