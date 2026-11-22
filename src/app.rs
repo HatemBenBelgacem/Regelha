@@ -7,8 +7,8 @@ use leptos_router::{
 
 use crate::components::{
     app_layout::AppLayout, aufgaben::AufgabenSection, buchungen::BuchungenSection,
-    chat::ChatSection, dashboard::BudgetDashboard, fixkosten::FixkostenSection,
-    monatskosten::MonatskostenSection, kontakte::KontakteSection,
+    chat::ChatSection, dashboard::BudgetDashboard, einstellungen::EinstellungenSection,
+    fixkosten::FixkostenSection, monatskosten::MonatskostenSection, kontakte::KontakteSection,
     schulden::SchuldenSection, fasten::FastenSection, startseite::Startseite,
 };
 
@@ -63,6 +63,7 @@ pub fn App() -> impl IntoView {
                     <Route path=StaticSegment("fasten") view=FastenSection/>
                     <Route path=StaticSegment("kontakte") view=KontakteSection/>
                     <Route path=StaticSegment("chat") view=ChatSection/>
+                    <Route path=StaticSegment("einstellungen") view=EinstellungenSection/>
                 </ParentRoute>
             </Routes>
         </Router>

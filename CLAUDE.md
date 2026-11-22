@@ -37,19 +37,20 @@ npm install                                                             # Tailwi
 src/
 ├── main.rs            Axum-Server, PORT von Railway, PgPool als Leptos-Kontext
 ├── lib.rs             Module, hydrate()
-├── app.rs             shell(), Routen: / (Startseite mit allen Modulen) · /dashboard · /buchungen · /fixkosten · /monatskosten · /schulden · /aufgaben · /fasten · /kontakte · /chat
+├── app.rs             shell(), Routen: / (Startseite mit allen Modulen) · /dashboard · /buchungen · /fixkosten · /monatskosten · /schulden · /aufgaben · /fasten · /kontakte · /chat · /einstellungen
 ├── backend/
 │   ├── mod.rs         register_server_functions() – jede neue #[server]-Funktion hier eintragen!
 │   ├── db.rs          Pool, Datenbank anlegen, Tabellen erstellen          [ssr]
 │   ├── auth.rs        Anmeldung, Sitzung, Passwort-Hash
-│   ├── budget.rs      Buchungen, Fixkosten, Dashboard-Kennzahlen
+│   ├── budget.rs      Buchungen, Fixkosten und Fixeinnahmen (Art: Ausgabe/Einnahme, optionale Kategorie), Dashboard-Kennzahlen
+│   ├── kategorien.rs  Kategorien für Fixkosten/Fixeinnahmen (eigene Tabelle `kategorien`, Verwaltung unter Einstellungen)
 │   ├── aufgaben.rs    Aufgaben
 │   ├── kontakte.rs    Kontakte (Vorname, Nachname)
 │   ├── schulden.rs    Schulden (nur Kontakt, eine pro Kontakt) und Schuldenpositionen (Datum, Betrag; Schuld 1:N)
 │   ├── rueckzahlungen.rs  Rückzahlungen (Datum, Betrag, Kontakt N:1), Reiter in der Schuld-Detailansicht
 │   ├── fasten.rs      Fasten (Beginn, Ende als Zeitpunkt; Dauer wird berechnet)
 │   └── chat.rs        Direkt- und Gruppenchats, Live-Abfrage, Tipp-Anzeige
-└── components/        app_layout, header, sideboard, startseite, dashboard, buchungen, fixkosten, monatskosten, schulden, rueckzahlungen, aufgaben, fasten, kontakte, chat, login
+└── components/        app_layout, header, sideboard, startseite, dashboard, buchungen, fixkosten, monatskosten, schulden, rueckzahlungen, aufgaben, fasten, kontakte, chat, login, einstellungen
 style/tailwind.css     Tailwind-Einstieg, Farben (Primär #004445, Palette in style/tailwind.css)
 ```
 

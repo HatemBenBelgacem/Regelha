@@ -93,6 +93,38 @@ impl Zahlungsperiode {
     }
 }
 
+/// Art eines wiederkehrenden Postens: Fixkosten (Ausgabe) oder Fixeinnahme (Einnahme).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FixkostenArt {
+    Ausgabe,
+    Einnahme,
+}
+
+impl FixkostenArt {
+    pub const ALLE: [Self; 2] = [Self::Ausgabe, Self::Einnahme];
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Ausgabe => "Ausgabe",
+            Self::Einnahme => "Einnahme",
+        }
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Ausgabe => "Fixkosten",
+            Self::Einnahme => "Fixeinnahme",
+        }
+    }
+
+    pub fn from_db_str(s: &str) -> Self {
+        match s {
+            "Einnahme" => Self::Einnahme,
+            _ => Self::Ausgabe,
+        }
+    }
+}
+
 /// Status eines Fixkosten-Vertrags.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FixkostenStatus {
@@ -148,14 +180,38 @@ pub struct FixkostenEintrag {
     pub kuendigungsfrist_monate: i32,
     pub zahlungsperiode: Zahlungsperiode,
     pub status: FixkostenStatus,
+    /// Fixkosten (Ausgabe) oder Fixeinnahme (Einnahme)
+    pub art: FixkostenArt,
+    /// Kategorie aus der Tabelle `kategorien`; None = ohne Kategorie
+    pub kategorie_id: Option<Uuid>,
     pub benutzer_id: Uuid,
     pub benutzer: String,
+}
+
+/// Die Angaben aus dem Formular für eine Fixkosten- oder Fixeinnahme-Position.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct FixkostenDaten {
+    pub buchungstext: String,
+    /// Betrag pro Zahlungsperiode in CHF
+    pub betrag: f64,
+    /// Datum im Format JJJJ-MM-TT
+    pub beginndatum: String,
+    pub kuendigungsfrist_monate: i32,
+    pub zahlungsperiode: Zahlungsperiode,
+    pub status: FixkostenStatus,
+    pub art: FixkostenArt,
+    pub kategorie_id: Option<Uuid>,
 }
 
 impl FixkostenEintrag {
     /// Auf einen Monat umgerechneter Betrag (z.B. Jahresbetrag / 12).
     pub fn monatsbetrag(&self) -> f64 {
         self.betrag / self.zahlungsperiode.monate() as f64
+    }
+
+    /// Ist dieser Eintrag eine Fixeinnahme (und keine Fixkosten)?
+    pub fn ist_einnahme(&self) -> bool {
+        self.art == FixkostenArt::Einnahme
     }
 
     /// Fallen für diesen Eintrag im angegebenen Monat Kosten an?
@@ -221,9 +277,10 @@ pub fn german_month_name(month: u32) -> &'static str {
 }
 
 #[cfg(feature = "ssr")]
-mod store {
+pub(crate) mod store {
     use super::*;
     use crate::backend::auth::default_admin_uuid;
+    use crate::backend::kategorien::store::{GESUNDHEIT_ID, KOMMUNIKATION_ID, WOHNEN_ID};
     use std::sync::{LazyLock, Mutex};
 
     pub static BUCHUNGEN_MEMORY: LazyLock<Mutex<Vec<Buchung>>> = LazyLock::new(|| {
@@ -273,6 +330,8 @@ mod store {
                 kuendigungsfrist_monate: 3,
                 zahlungsperiode: Zahlungsperiode::Monatlich,
                 status: FixkostenStatus::Aktiv,
+                art: FixkostenArt::Ausgabe,
+                kategorie_id: Some(WOHNEN_ID),
                 benutzer_id: admin_id,
                 benutzer: "admin".to_string(),
             },
@@ -284,6 +343,8 @@ mod store {
                 kuendigungsfrist_monate: 3,
                 zahlungsperiode: Zahlungsperiode::Monatlich,
                 status: FixkostenStatus::Aktiv,
+                art: FixkostenArt::Ausgabe,
+                kategorie_id: Some(GESUNDHEIT_ID),
                 benutzer_id: admin_id,
                 benutzer: "admin".to_string(),
             },
@@ -295,6 +356,8 @@ mod store {
                 kuendigungsfrist_monate: 1,
                 zahlungsperiode: Zahlungsperiode::Monatlich,
                 status: FixkostenStatus::Aktiv,
+                art: FixkostenArt::Ausgabe,
+                kategorie_id: Some(KOMMUNIKATION_ID),
                 benutzer_id: admin_id,
                 benutzer: "admin".to_string(),
             },
@@ -345,9 +408,10 @@ pub async fn get_dashboard_kennzahlen() -> Result<DashboardKennzahlen, ServerFnE
         .map(|b| b.betrag)
         .fold(0.0, |acc, x| acc + x);
 
+    // Fixeinnahmen sind keine Kosten und werden hier nicht mitgezählt
     let summe_fixkosten: f64 = fixkosten
         .iter()
-        .filter(|f| f.zaehlt_im_monat(current_year, current_month))
+        .filter(|f| !f.ist_einnahme() && f.zaehlt_im_monat(current_year, current_month))
         .map(FixkostenEintrag::monatsbetrag)
         .sum();
 
@@ -649,6 +713,8 @@ pub async fn get_fixkosten() -> Result<Vec<FixkostenEintrag>, ServerFnError> {
                     f.kuendigungsfrist_monate,
                     f.zahlungsperiode,
                     f.status,
+                    f.art,
+                    f.kategorie_id,
                     f.benutzer_id,
                     u.benutzername AS benutzer
                 FROM fixkosten f
@@ -674,6 +740,8 @@ pub async fn get_fixkosten() -> Result<Vec<FixkostenEintrag>, ServerFnError> {
                         &row.get::<String, _>("zahlungsperiode"),
                     ),
                     status: FixkostenStatus::from_db_str(&row.get::<String, _>("status")),
+                    art: FixkostenArt::from_db_str(&row.get::<String, _>("art")),
+                    kategorie_id: row.get("kategorie_id"),
                     benutzer_id: row.get("benutzer_id"),
                     benutzer: row.get("benutzer"),
                 })
@@ -699,14 +767,17 @@ pub async fn get_fixkosten() -> Result<Vec<FixkostenEintrag>, ServerFnError> {
     input = leptos::server_fn::codec::Json,
     endpoint = "add_fixkosten"
 )]
-pub async fn add_fixkosten(
-    buchungstext: String,
-    betrag: f64,
-    beginndatum: String,
-    kuendigungsfrist_monate: i32,
-    zahlungsperiode: Zahlungsperiode,
-    status: FixkostenStatus,
-) -> Result<FixkostenEintrag, ServerFnError> {
+pub async fn add_fixkosten(daten: FixkostenDaten) -> Result<FixkostenEintrag, ServerFnError> {
+    let FixkostenDaten {
+        buchungstext,
+        betrag,
+        beginndatum,
+        kuendigungsfrist_monate,
+        zahlungsperiode,
+        status,
+        art,
+        kategorie_id,
+    } = daten;
     let trimmed = pruefe_text_und_betrag(&buchungstext, betrag)?;
     if !(0..=36).contains(&kuendigungsfrist_monate) {
         return Err(ServerFnError::new(
@@ -718,9 +789,11 @@ pub async fn add_fixkosten(
     #[cfg(feature = "ssr")]
     {
         use crate::backend::auth::require_current_user;
+        use crate::backend::kategorien::pruefe_kategorie_zugehoerig;
         use sqlx::PgPool;
 
         let current_user = require_current_user().await?;
+        pruefe_kategorie_zugehoerig(kategorie_id, current_user.id).await?;
 
         let eintrag = FixkostenEintrag {
             id: Uuid::new_v4(),
@@ -730,6 +803,8 @@ pub async fn add_fixkosten(
             kuendigungsfrist_monate,
             zahlungsperiode,
             status,
+            art,
+            kategorie_id,
             benutzer_id: current_user.id,
             benutzer: current_user.benutzername,
         };
@@ -738,8 +813,8 @@ pub async fn add_fixkosten(
             sqlx::query(
                 r#"
                 INSERT INTO fixkosten
-                    (id, buchungstext, betrag, beginndatum, kuendigungsfrist_monate, zahlungsperiode, status, benutzer_id)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                    (id, buchungstext, betrag, beginndatum, kuendigungsfrist_monate, zahlungsperiode, status, art, kategorie_id, benutzer_id)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
                 "#,
             )
             .bind(eintrag.id)
@@ -749,6 +824,8 @@ pub async fn add_fixkosten(
             .bind(eintrag.kuendigungsfrist_monate)
             .bind(eintrag.zahlungsperiode.as_str())
             .bind(eintrag.status.as_str())
+            .bind(eintrag.art.as_str())
+            .bind(eintrag.kategorie_id)
             .bind(eintrag.benutzer_id)
             .execute(&pool)
             .await
@@ -774,15 +851,17 @@ pub async fn add_fixkosten(
     input = leptos::server_fn::codec::Json,
     endpoint = "update_fixkosten"
 )]
-pub async fn update_fixkosten(
-    id: Uuid,
-    buchungstext: String,
-    betrag: f64,
-    beginndatum: String,
-    kuendigungsfrist_monate: i32,
-    zahlungsperiode: Zahlungsperiode,
-    status: FixkostenStatus,
-) -> Result<(), ServerFnError> {
+pub async fn update_fixkosten(id: Uuid, daten: FixkostenDaten) -> Result<(), ServerFnError> {
+    let FixkostenDaten {
+        buchungstext,
+        betrag,
+        beginndatum,
+        kuendigungsfrist_monate,
+        zahlungsperiode,
+        status,
+        art,
+        kategorie_id,
+    } = daten;
     let trimmed = pruefe_text_und_betrag(&buchungstext, betrag)?;
     if !(0..=36).contains(&kuendigungsfrist_monate) {
         return Err(ServerFnError::new(
@@ -794,17 +873,20 @@ pub async fn update_fixkosten(
     #[cfg(feature = "ssr")]
     {
         use crate::backend::auth::require_current_user;
+        use crate::backend::kategorien::pruefe_kategorie_zugehoerig;
         use sqlx::PgPool;
 
         let current_user = require_current_user().await?;
+        pruefe_kategorie_zugehoerig(kategorie_id, current_user.id).await?;
 
         if let Some(pool) = use_context::<PgPool>() {
             sqlx::query(
                 r#"
                 UPDATE fixkosten
                 SET buchungstext = $1, betrag = $2, beginndatum = $3,
-                    kuendigungsfrist_monate = $4, zahlungsperiode = $5, status = $6
-                WHERE id = $7 AND benutzer_id = $8
+                    kuendigungsfrist_monate = $4, zahlungsperiode = $5, status = $6,
+                    art = $7, kategorie_id = $8
+                WHERE id = $9 AND benutzer_id = $10
                 "#,
             )
             .bind(&trimmed)
@@ -813,6 +895,8 @@ pub async fn update_fixkosten(
             .bind(kuendigungsfrist_monate)
             .bind(zahlungsperiode.as_str())
             .bind(status.as_str())
+            .bind(art.as_str())
+            .bind(kategorie_id)
             .bind(id)
             .bind(current_user.id)
             .execute(&pool)
@@ -833,6 +917,8 @@ pub async fn update_fixkosten(
             f.kuendigungsfrist_monate = kuendigungsfrist_monate;
             f.zahlungsperiode = zahlungsperiode;
             f.status = status;
+            f.art = art;
+            f.kategorie_id = kategorie_id;
         }
     }
 
@@ -934,16 +1020,21 @@ pub struct MonatsKosten {
     pub fixkosten: f64,
     /// Einzelne Fixkosten-Verträge, die in diesem Monat Kosten verursachen
     pub fixkosten_posten: Vec<FixkostenPosten>,
+    /// Summe der Fixeinnahmen in diesem Monat
+    pub fixeinnahmen: f64,
+    /// Einzelne Fixeinnahmen, die in diesem Monat anfallen
+    pub fixeinnahmen_posten: Vec<FixkostenPosten>,
     pub total_kosten: f64,
+    /// Einnahmen (Buchungen) + Fixeinnahmen - Total Kosten
     pub saldo: f64,
     pub anzahl_buchungen: usize,
 }
 
-/// Gruppiert Buchungen nach Monat und rechnet die monatlichen Fixkosten dazu.
-/// Fixkosten zählen ab ihrem Beginnmonat, solange sie nicht beendet sind; nicht monatliche
+/// Gruppiert Buchungen nach Monat und rechnet die monatlichen Fixkosten und Fixeinnahmen dazu.
+/// Fixkosten und Fixeinnahmen zählen ab ihrem Beginnmonat, solange sie nicht beendet sind; nicht monatliche
 /// Zahlungen werden auf den Monat umgerechnet (z.B. Jahresbetrag / 12).
 /// Die Liste umfasst alle zwölf Monate des Jahres von `bis` (Januar bis Dezember, älteste zuerst).
-/// Monate in der Zukunft enthalten nur die Fixkosten als Prognose.
+/// Monate in der Zukunft enthalten nur die Fixkosten und Fixeinnahmen als Prognose.
 pub fn berechne_monatskosten(
     buchungen: &[Buchung],
     fixkosten: &[FixkostenEintrag],
@@ -967,17 +1058,29 @@ pub fn berechne_monatskosten(
                     BuchungsArt::Ausgang => ausgaben += b.betrag,
                 }
             }
-            let fixkosten_posten: Vec<FixkostenPosten> = fixkosten
+
+            let posten = |f: &FixkostenEintrag| FixkostenPosten {
+                id: f.id,
+                buchungstext: f.buchungstext.clone(),
+                zahlungsperiode: f.zahlungsperiode,
+                monatsbetrag: f.monatsbetrag(),
+            };
+            let aktive: Vec<&FixkostenEintrag> = fixkosten
                 .iter()
                 .filter(|f| f.zaehlt_im_monat(jahr, monat))
-                .map(|f| FixkostenPosten {
-                    id: f.id,
-                    buchungstext: f.buchungstext.clone(),
-                    zahlungsperiode: f.zahlungsperiode,
-                    monatsbetrag: f.monatsbetrag(),
-                })
+                .collect();
+            let fixkosten_posten: Vec<FixkostenPosten> = aktive
+                .iter()
+                .filter(|f| !f.ist_einnahme())
+                .map(|f| posten(f))
+                .collect();
+            let fixeinnahmen_posten: Vec<FixkostenPosten> = aktive
+                .iter()
+                .filter(|f| f.ist_einnahme())
+                .map(|f| posten(f))
                 .collect();
             let summe_fixkosten: f64 = fixkosten_posten.iter().map(|p| p.monatsbetrag).sum();
+            let summe_fixeinnahmen: f64 = fixeinnahmen_posten.iter().map(|p| p.monatsbetrag).sum();
             let total_kosten = ausgaben + summe_fixkosten;
 
             MonatsKosten {
@@ -988,8 +1091,10 @@ pub fn berechne_monatskosten(
                 ausgaben,
                 fixkosten: summe_fixkosten,
                 fixkosten_posten,
+                fixeinnahmen: summe_fixeinnahmen,
+                fixeinnahmen_posten,
                 total_kosten,
-                saldo: einnahmen - total_kosten,
+                saldo: einnahmen + summe_fixeinnahmen - total_kosten,
                 anzahl_buchungen,
             }
         })
@@ -1044,9 +1149,53 @@ mod tests {
             kuendigungsfrist_monate: 3,
             zahlungsperiode: periode,
             status,
+            art: FixkostenArt::Ausgabe,
+            kategorie_id: None,
             benutzer_id: Uuid::nil(),
             benutzer: "test".to_string(),
         }
+    }
+
+    fn fixeinnahme(
+        betrag: f64,
+        beginn: (i32, u32, u32),
+        periode: Zahlungsperiode,
+        status: FixkostenStatus,
+    ) -> FixkostenEintrag {
+        FixkostenEintrag {
+            art: FixkostenArt::Einnahme,
+            ..fixkosten(betrag, beginn, periode, status)
+        }
+    }
+
+    #[test]
+    fn fixeinnahmen_erhoehen_saldo_aber_nicht_fixkosten() {
+        let buchungen = vec![buchung((2026, 1, 1), 3000.0, BuchungsArt::Eingang)];
+        let liste = vec![
+            fixkosten(1000.0, (2024, 1, 1), Zahlungsperiode::Monatlich, FixkostenStatus::Aktiv),
+            fixeinnahme(500.0, (2024, 1, 1), Zahlungsperiode::Monatlich, FixkostenStatus::Aktiv),
+            fixeinnahme(1200.0, (2024, 1, 1), Zahlungsperiode::Jaehrlich, FixkostenStatus::Beendet),
+        ];
+        let bis = NaiveDate::from_ymd_opt(2026, 1, 15).unwrap();
+        let zeilen = berechne_monatskosten(&buchungen, &liste, bis);
+
+        // Januar: Fixkosten nur der Ausgabe-Eintrag, Fixeinnahmen nur der aktive Eintrag
+        assert_eq!(zeilen[0].fixkosten, 1000.0);
+        assert_eq!(zeilen[0].fixkosten_posten.len(), 1);
+        assert_eq!(zeilen[0].fixeinnahmen, 500.0);
+        assert_eq!(zeilen[0].fixeinnahmen_posten.len(), 1);
+        // Total Kosten enthalten keine Fixeinnahmen
+        assert_eq!(zeilen[0].total_kosten, 1000.0);
+        // Saldo = Einnahmen (3000) + Fixeinnahmen (500) - Total Kosten (1000)
+        assert_eq!(zeilen[0].saldo, 2500.0);
+    }
+
+    #[test]
+    fn fixkosten_standardwerte_sind_ausgaben_ohne_kategorie() {
+        let eintrag = fixkosten(100.0, (2025, 1, 1), Zahlungsperiode::Monatlich, FixkostenStatus::Aktiv);
+        assert!(!eintrag.ist_einnahme());
+        assert_eq!(eintrag.kategorie_id, None);
+        assert!(fixeinnahme(100.0, (2025, 1, 1), Zahlungsperiode::Monatlich, FixkostenStatus::Aktiv).ist_einnahme());
     }
 
     #[test]

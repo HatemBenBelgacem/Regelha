@@ -25,21 +25,38 @@ fn betrag_text(wert: f64) -> String {
     format!("{:.2}", wert)
 }
 
+/// Farben der Beträge: Fixkosten schwarz, Fixeinnahmen grün.
+#[derive(Clone, Copy)]
+struct Farben {
+    zelle: &'static str,
+    summe: &'static str,
+}
+
+const FARBEN_AUSGABEN: Farben = Farben {
+    zelle: "text-right text-black whitespace-nowrap",
+    summe: "text-right font-semibold text-black whitespace-nowrap",
+};
+
+const FARBEN_EINNAHMEN: Farben = Farben {
+    zelle: "text-right text-success whitespace-nowrap",
+    summe: "text-right font-semibold text-success whitespace-nowrap",
+};
+
 /// Eine fertig formatierte Zelle der Tabelle.
 struct Zelle {
     text: String,
     klasse: &'static str,
 }
 
-/// Eine Zeile pro Fixkosten-Vertrag mit dem Betrag je Monat.
-struct FixkostenZeile {
+/// Eine Zeile pro Fixkosten- oder Fixeinnahme-Vertrag mit dem Betrag je Monat.
+struct PostenZeile {
     titel: String,
-    untertitel: &'static str,
+    untertitel: String,
     zellen: Vec<Zelle>,
     summe: Zelle,
 }
 
-/// Eine Summenzeile unter den Fixkosten (Einnahmen, Ausgaben, Total, Saldo).
+/// Eine Summenzeile unter der Tabelle (Einnahmen, Ausgaben, Total, Saldo).
 struct SummenZeile {
     titel: &'static str,
     untertitel: String,
@@ -47,12 +64,12 @@ struct SummenZeile {
     summe: Zelle,
 }
 
-/// Ein Fixkosten-Betrag im Monat. Ohne Betrag steht ein Strich.
-fn fixkosten_zelle(betrag: Option<f64>) -> Zelle {
+/// Ein Betrag im Monat. Ohne Betrag steht ein Strich.
+fn posten_zelle(betrag: Option<f64>, farben: Farben) -> Zelle {
     match betrag {
         Some(b) => Zelle {
             text: betrag_text(b),
-            klasse: "text-right text-black whitespace-nowrap",
+            klasse: farben.zelle,
         },
         None => Zelle {
             text: "–".to_string(),
@@ -61,13 +78,16 @@ fn fixkosten_zelle(betrag: Option<f64>) -> Zelle {
     }
 }
 
-/// Alle Fixkosten, die in mindestens einem angezeigten Monat Kosten verursachen.
+/// Alle Posten (Fixkosten oder Fixeinnahmen, je nach `auswahl`), die in mindestens einem angezeigten Monat anfallen.
 /// Sortiert nach Beginn: der älteste Vertrag steht oben.
-fn fixkosten_eindeutig(monate: &[MonatsKosten]) -> Vec<FixkostenPosten> {
+fn posten_eindeutig(
+    monate: &[MonatsKosten],
+    auswahl: impl Fn(&MonatsKosten) -> &[FixkostenPosten],
+) -> Vec<FixkostenPosten> {
     let mut liste: Vec<FixkostenPosten> = Vec::new();
     // Die Monate kommen Januar bis Dezember. So steht ein Vertrag an der Stelle seines Beginns.
     for monat in monate.iter() {
-        for posten in &monat.fixkosten_posten {
+        for posten in auswahl(monat) {
             if !liste.iter().any(|p| p.id == posten.id) {
                 liste.push(posten.clone());
             }
@@ -76,13 +96,40 @@ fn fixkosten_eindeutig(monate: &[MonatsKosten]) -> Vec<FixkostenPosten> {
     liste
 }
 
-/// Betrag eines Fixkosten-Vertrags in einem Monat. `None`, wenn in diesem Monat nichts anfällt.
-fn betrag_im_monat(monat: &MonatsKosten, id: Uuid) -> Option<f64> {
-    monat
-        .fixkosten_posten
-        .iter()
-        .find(|p| p.id == id)
-        .map(|p| p.monatsbetrag)
+/// Betrag eines Postens in einem Monat. `None`, wenn in diesem Monat nichts anfällt.
+fn betrag_im_monat(posten: &[FixkostenPosten], id: Uuid) -> Option<f64> {
+    posten.iter().find(|p| p.id == id).map(|p| p.monatsbetrag)
+}
+
+/// Baut die Zeilen für Fixkosten oder Fixeinnahmen. `praefix` steht vor der Zahlungsperiode in der Unterzeile.
+fn posten_zeilen(
+    monate: &[MonatsKosten],
+    auswahl: impl Fn(&MonatsKosten) -> &[FixkostenPosten],
+    farben: Farben,
+    praefix: &'static str,
+) -> Vec<PostenZeile> {
+    posten_eindeutig(monate, &auswahl)
+        .into_iter()
+        .map(|posten| {
+            let werte: Vec<Option<f64>> = monate
+                .iter()
+                .map(|m| betrag_im_monat(auswahl(m), posten.id))
+                .collect();
+            let summe: f64 = werte.iter().flatten().sum();
+            PostenZeile {
+                titel: posten.buchungstext,
+                untertitel: format!("{praefix}{}", posten.zahlungsperiode.label()),
+                zellen: werte
+                    .into_iter()
+                    .map(|w| posten_zelle(w, farben))
+                    .collect(),
+                summe: Zelle {
+                    text: betrag_text(summe),
+                    klasse: farben.summe,
+                },
+            }
+        })
+        .collect()
 }
 
 /// Baut eine Summenzeile. Die Farbe kann von jedem Wert abhängen (z.B. beim Saldo).
@@ -127,8 +174,8 @@ fn kopf_view((name, anzahl): (String, String)) -> impl IntoView {
     }
 }
 
-fn fixkosten_zeile_view(zeile: FixkostenZeile) -> impl IntoView {
-    let FixkostenZeile { titel, untertitel, zellen, summe } = zeile;
+fn posten_zeile_view(zeile: PostenZeile) -> impl IntoView {
+    let PostenZeile { titel, untertitel, zellen, summe } = zeile;
     view! {
         <tr>
             <td class="sticky left-0 z-10 bg-base-100 whitespace-nowrap font-medium">
@@ -159,27 +206,20 @@ fn summen_zeile_view(zeile: SummenZeile) -> impl IntoView {
     }
 }
 
-/// Die Tabelle: Monate als Spalten, Fixkosten als Zeilen, unten die Summen.
+/// Die Tabelle: Monate als Spalten, Fixkosten und Fixeinnahmen als Zeilen, unten die Summen.
 fn monatstabelle(monate: Vec<MonatsKosten>) -> impl IntoView {
-    let fix_zeilen: Vec<FixkostenZeile> = fixkosten_eindeutig(&monate)
-        .into_iter()
-        .map(|posten| {
-            let werte: Vec<Option<f64>> = monate
-                .iter()
-                .map(|m| betrag_im_monat(m, posten.id))
-                .collect();
-            let summe: f64 = werte.iter().flatten().sum();
-            FixkostenZeile {
-                titel: posten.buchungstext,
-                untertitel: posten.zahlungsperiode.label(),
-                zellen: werte.into_iter().map(fixkosten_zelle).collect(),
-                summe: Zelle {
-                    text: betrag_text(summe),
-                    klasse: "text-right font-semibold text-black whitespace-nowrap",
-                },
-            }
-        })
-        .collect();
+    let ausgaben_zeilen = posten_zeilen(
+        &monate,
+        |m| m.fixkosten_posten.as_slice(),
+        FARBEN_AUSGABEN,
+        "",
+    );
+    let einnahmen_zeilen = posten_zeilen(
+        &monate,
+        |m| m.fixeinnahmen_posten.as_slice(),
+        FARBEN_EINNAHMEN,
+        "Fixeinnahme · ",
+    );
 
     // Der Durchschnitt zählt nur Monate bis heute. Zukunftsmonate enthalten nur die Prognose.
     let heute = Local::now().date_naive();
@@ -212,6 +252,13 @@ fn monatstabelle(monate: Vec<MonatsKosten>) -> impl IntoView {
             betrag_text,
         ),
         summen_zeile(
+            "Fixeinnahmen gesamt",
+            String::new(),
+            monate.iter().map(|m| m.fixeinnahmen).collect(),
+            |_: f64| "text-right text-success whitespace-nowrap",
+            betrag_text,
+        ),
+        summen_zeile(
             "Total Kosten",
             format!("Ø Kosten: CHF {:.2} / Monat", total_summe / anzahl_monate),
             monate.iter().map(|m| m.total_kosten).collect(),
@@ -231,14 +278,14 @@ fn monatstabelle(monate: Vec<MonatsKosten>) -> impl IntoView {
         .iter()
         .map(|m| (m.monat_name.clone(), format!("{} Buchungen", m.anzahl_buchungen)))
         .collect();
-    let leer = fix_zeilen.is_empty();
+    let leer = ausgaben_zeilen.is_empty() && einnahmen_zeilen.is_empty();
     let colspan = (monate.len() + 2).to_string();
 
     view! {
         <table class="table table-zebra table-xs w-full">
             <thead>
                 <tr class="text-xs uppercase text-base-content/70">
-                    <th class="sticky left-0 z-10 bg-base-100">"Fixkosten"</th>
+                    <th class="sticky left-0 z-10 bg-base-100">"Fixkosten & Fixeinnahmen"</th>
                     {kopf.into_iter().map(kopf_view).collect_view()}
                     <th class="text-right">"Summe"</th>
                 </tr>
@@ -247,11 +294,12 @@ fn monatstabelle(monate: Vec<MonatsKosten>) -> impl IntoView {
                 {leer.then(move || view! {
                     <tr>
                         <td colspan=colspan class="text-center text-base-content/60">
-                            "Keine Fixkosten erfasst"
+                            "Keine Fixkosten oder Fixeinnahmen erfasst"
                         </td>
                     </tr>
                 })}
-                {fix_zeilen.into_iter().map(fixkosten_zeile_view).collect_view()}
+                {ausgaben_zeilen.into_iter().map(posten_zeile_view).collect_view()}
+                {einnahmen_zeilen.into_iter().map(posten_zeile_view).collect_view()}
             </tbody>
             <tfoot>
                 {summen.into_iter().map(summen_zeile_view).collect_view()}
@@ -270,7 +318,7 @@ pub fn MonatskostenSection() -> impl IntoView {
                 <div>
                     <h2 class="card-title text-lg sm:text-xl">"Kosten pro Monat"</h2>
                     <p class="text-xs sm:text-sm text-base-content/70">
-                        "Übersicht über das ganze Jahr: Einnahmen, Ausgaben und Fixkosten in CHF"
+                        "Übersicht über das ganze Jahr: Einnahmen, Ausgaben, Fixkosten und Fixeinnahmen in CHF"
                     </p>
                 </div>
 
@@ -294,7 +342,7 @@ pub fn MonatskostenSection() -> impl IntoView {
                 </div>
 
                 <p class="text-xs text-base-content/60">
-                    "Total Kosten = Ausgaben + Fixkosten. Fixkosten zählen ab ihrem Beginnmonat, solange sie nicht beendet sind. Vierteljährliche, halbjährliche und jährliche Zahlungen werden auf den Monat umgerechnet. Ein Strich (–) bedeutet: In diesem Monat fällt für diese Fixkosten nichts an. Ab dem aktuellen Monat zeigt die Tabelle nur die Fixkosten als Prognose."
+                    "Total Kosten = Ausgaben + Fixkosten. Saldo = Einnahmen + Fixeinnahmen − Total Kosten. Fixkosten und Fixeinnahmen zählen ab ihrem Beginnmonat, solange sie nicht beendet sind. Vierteljährliche, halbjährliche und jährliche Zahlungen werden auf den Monat umgerechnet. Ein Strich (–) bedeutet: In diesem Monat fällt für diesen Posten nichts an. Ab dem aktuellen Monat zeigt die Tabelle nur die Fixkosten und Fixeinnahmen als Prognose."
                 </p>
             </div>
         </section>

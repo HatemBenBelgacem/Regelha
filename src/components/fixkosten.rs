@@ -1,12 +1,14 @@
 use chrono::{Datelike, Local};
 use leptos::prelude::*;
+use uuid::Uuid;
 
-use crate::components::modal::Modal;
 use crate::backend::budget::{
-    add_fixkosten, delete_fixkosten, get_fixkosten, kuendigungsfrist_text,
-    update_fixkosten, update_fixkosten_status, FixkostenEintrag, FixkostenStatus,
+    add_fixkosten, delete_fixkosten, get_fixkosten, kuendigungsfrist_text, update_fixkosten,
+    update_fixkosten_status, FixkostenArt, FixkostenDaten, FixkostenEintrag, FixkostenStatus,
     Zahlungsperiode,
 };
+use crate::backend::kategorien::{get_kategorien, Kategorie};
+use crate::components::modal::Modal;
 
 /// Auswahlmöglichkeiten für die Kündigungsfrist (in Monaten)
 const KUENDIGUNGSFRISTEN: [i32; 7] = [0, 1, 2, 3, 6, 12, 24];
@@ -24,6 +26,23 @@ fn heute_iso() -> String {
     Local::now().date_naive().format("%Y-%m-%d").to_string()
 }
 
+/// Überschrift des Modalfensters, je nach Art und ob ein Eintrag bearbeitet wird.
+fn modal_titel(art: FixkostenArt, bearbeiten: bool) -> String {
+    match (art, bearbeiten) {
+        (FixkostenArt::Ausgabe, false) => "Neue Fixkosten".to_string(),
+        (FixkostenArt::Ausgabe, true) => "Fixkosten bearbeiten".to_string(),
+        (FixkostenArt::Einnahme, false) => "Neue Fixeinnahme".to_string(),
+        (FixkostenArt::Einnahme, true) => "Fixeinnahme bearbeiten".to_string(),
+    }
+}
+
+/// Name der Kategorie zu einer Id. Ohne Kategorie steht dort "Ohne Kategorie".
+fn kategorie_name(kategorien: &[Kategorie], id: Option<Uuid>) -> String {
+    id.and_then(|id| kategorien.iter().find(|k| k.id == id))
+        .map(|k| k.name.clone())
+        .unwrap_or_else(|| "Ohne Kategorie".to_string())
+}
+
 #[component]
 pub fn FixkostenSection() -> impl IntoView {
     let today = Local::now().date_naive();
@@ -34,61 +53,36 @@ pub fn FixkostenSection() -> impl IntoView {
     let (kuendigungsfrist, set_kuendigungsfrist) = signal(0_i32);
     let (zahlungsperiode, set_zahlungsperiode) = signal(Zahlungsperiode::Monatlich);
     let (status, set_status) = signal(FixkostenStatus::Aktiv);
+    let (art, set_art) = signal(FixkostenArt::Ausgabe);
+    let (kategorie, set_kategorie) = signal(Option::<Uuid>::None);
     let (error_msg, set_error_msg) = signal(Option::<String>::None);
     let (modal_offen, set_modal_offen) = signal(false);
-    // Id des Vertrags, der gerade bearbeitet wird (None = neuer Vertrag)
-    let (bearbeiten_id, set_bearbeiten_id) = signal(Option::<uuid::Uuid>::None);
+    // Id des Eintrags, der gerade bearbeitet wird (None = neuer Eintrag)
+    let (bearbeiten_id, set_bearbeiten_id) = signal(Option::<Uuid>::None);
     // Zweiter Klick auf "Löschen" bestätigt das Löschen
     let (loesch_bestaetigen, set_loesch_bestaetigen) = signal(false);
 
     let fixkosten_resource = Resource::new(|| (), |_| get_fixkosten());
+    let kategorien_resource = Resource::new(|| (), |_| get_kategorien());
+    // Kategorien für Auswahlfeld und Anzeige. Solange sie nicht geladen sind, ist die Liste leer.
+    let kategorien = move || kategorien_resource.get().and_then(|r| r.ok()).unwrap_or_default();
 
-    let create_action = Action::new(
-        move |(text, betrag, beginn, frist, periode, status): &(
-            String,
-            f64,
-            String,
-            i32,
-            Zahlungsperiode,
-            FixkostenStatus,
-        )| {
-            let (text, betrag, beginn, frist, periode, status) =
-                (text.clone(), *betrag, beginn.clone(), *frist, *periode, *status);
-            async move { add_fixkosten(text, betrag, beginn, frist, periode, status).await }
-        },
-    );
+    let create_action = Action::new(move |daten: &FixkostenDaten| {
+        let daten = daten.clone();
+        async move { add_fixkosten(daten).await }
+    });
 
-    let update_action = Action::new(
-        move |(id, text, betrag, beginn, frist, periode, status): &(
-            uuid::Uuid,
-            String,
-            f64,
-            String,
-            i32,
-            Zahlungsperiode,
-            FixkostenStatus,
-        )| {
-            let (id, text, betrag, beginn, frist, periode, status) = (
-                *id,
-                text.clone(),
-                *betrag,
-                beginn.clone(),
-                *frist,
-                *periode,
-                *status,
-            );
-            async move {
-                update_fixkosten(id, text, betrag, beginn, frist, periode, status).await
-            }
-        },
-    );
+    let update_action = Action::new(move |(id, daten): &(Uuid, FixkostenDaten)| {
+        let (id, daten) = (*id, daten.clone());
+        async move { update_fixkosten(id, daten).await }
+    });
 
-    let status_action = Action::new(move |(id, status): &(uuid::Uuid, FixkostenStatus)| {
+    let status_action = Action::new(move |(id, status): &(Uuid, FixkostenStatus)| {
         let (id, status) = (*id, *status);
         async move { update_fixkosten_status(id, status).await }
     });
 
-    let delete_action = Action::new(move |id: &uuid::Uuid| {
+    let delete_action = Action::new(move |id: &Uuid| {
         let id = *id;
         async move { delete_fixkosten(id).await }
     });
@@ -151,22 +145,40 @@ pub fn FixkostenSection() -> impl IntoView {
         }
     });
 
-    // Öffnet die Eingabemaske mit den Werten eines bestehenden Vertrags (Doppelklick auf die Zeile)
+    // Öffnet die Eingabemaske mit den Werten eines bestehenden Eintrags (Doppelklick auf die Zeile)
     let bearbeiten_oeffnen = move |f: FixkostenEintrag| {
         set_error_msg.set(None);
         set_loesch_bestaetigen.set(false);
         set_bearbeiten_id.set(Some(f.id));
+        set_art.set(f.art);
         set_buchungstext.set(f.buchungstext.clone());
         set_betrag_input.set(format!("{:.2}", f.betrag));
         set_beginndatum.set(f.beginndatum.format("%Y-%m-%d").to_string());
         set_kuendigungsfrist.set(f.kuendigungsfrist_monate);
         set_zahlungsperiode.set(f.zahlungsperiode);
         set_status.set(f.status);
+        set_kategorie.set(f.kategorie_id);
+        set_modal_offen.set(true);
+    };
+
+    // Öffnet ein leeres Formular für eine neue Fixkosten- oder Fixeinnahme-Position
+    let neu_oeffnen = move |neue_art: FixkostenArt| {
+        set_bearbeiten_id.set(None);
+        set_error_msg.set(None);
+        set_loesch_bestaetigen.set(false);
+        set_buchungstext.set(String::new());
+        set_betrag_input.set(String::new());
+        set_art.set(neue_art);
+        set_beginndatum.set(heute_iso());
+        set_kuendigungsfrist.set(0);
+        set_zahlungsperiode.set(Zahlungsperiode::Monatlich);
+        set_status.set(FixkostenStatus::Aktiv);
+        set_kategorie.set(None);
         set_modal_offen.set(true);
     };
 
     // Erster Klick fragt nach, zweiter Klick löscht
-    let loeschen_klick = move |id: uuid::Uuid| {
+    let loeschen_klick = move |id: Uuid| {
         if loesch_bestaetigen.get() {
             delete_action.dispatch(id);
         } else {
@@ -176,32 +188,26 @@ pub fn FixkostenSection() -> impl IntoView {
 
     let on_submit = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
-        let text = buchungstext.get();
         let raw_amount = betrag_input.get().replace(',', ".");
         match raw_amount.trim().parse::<f64>() {
             Ok(val) if val > 0.0 => {
                 set_error_msg.set(None);
+                let daten = FixkostenDaten {
+                    buchungstext: buchungstext.get(),
+                    betrag: val,
+                    beginndatum: beginndatum.get(),
+                    kuendigungsfrist_monate: kuendigungsfrist.get(),
+                    zahlungsperiode: zahlungsperiode.get(),
+                    status: status.get(),
+                    art: art.get(),
+                    kategorie_id: kategorie.get(),
+                };
                 match bearbeiten_id.get() {
                     Some(id) => {
-                        update_action.dispatch((
-                            id,
-                            text,
-                            val,
-                            beginndatum.get(),
-                            kuendigungsfrist.get(),
-                            zahlungsperiode.get(),
-                            status.get(),
-                        ));
+                        update_action.dispatch((id, daten));
                     }
                     None => {
-                        create_action.dispatch((
-                            text,
-                            val,
-                            beginndatum.get(),
-                            kuendigungsfrist.get(),
-                            zahlungsperiode.get(),
-                            status.get(),
-                        ));
+                        create_action.dispatch(daten);
                     }
                 }
             }
@@ -219,44 +225,83 @@ pub fn FixkostenSection() -> impl IntoView {
             <div class="card-body p-4 sm:p-6 space-y-6">
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
-                        <h2 class="card-title text-lg sm:text-xl">"Fixkosten"</h2>
+                        <h2 class="card-title text-lg sm:text-xl">"Fixkosten & Fixeinnahmen"</h2>
                         <p class="text-xs sm:text-sm text-base-content/70">
-                            "Erfassung wiederkehrender Fixkosten in CHF (Miete, Krankenkasse, Abos) mit Vertragsdaten"
+                            "Wiederkehrende Kosten (Miete, Krankenkasse, Abos) und Einnahmen (Lohn, Mieteinnahmen) in CHF mit Vertragsdaten und Kategorie"
                         </p>
                     </div>
-                    <button
-                        type="button"
-                        class="btn btn-secondary self-start sm:self-auto"
-                        on:click=move |_| {
-                            set_bearbeiten_id.set(None);
-                            set_error_msg.set(None);
-                            set_buchungstext.set(String::new());
-                            set_betrag_input.set(String::new());
-                            set_beginndatum.set(heute_iso());
-                            set_kuendigungsfrist.set(0);
-                            set_zahlungsperiode.set(Zahlungsperiode::Monatlich);
-                            set_status.set(FixkostenStatus::Aktiv);
-                            set_modal_offen.set(true);
-                        }
-                    >
-                        "+ Neue Fixkosten"
-                    </button>
+                    <div class="flex flex-wrap gap-2 self-start sm:self-auto">
+                        <button
+                            type="button"
+                            class="btn btn-secondary"
+                            on:click=move |_| neu_oeffnen(FixkostenArt::Ausgabe)
+                        >
+                            "+ Neue Fixkosten"
+                        </button>
+                        <button
+                            type="button"
+                            class="btn btn-outline btn-secondary"
+                            on:click=move |_| neu_oeffnen(FixkostenArt::Einnahme)
+                        >
+                            "+ Neue Fixeinnahme"
+                        </button>
+                    </div>
                 </div>
 
-                // Modalfenster zum Erfassen und Bearbeiten von Fixkosten
+                // Modalfenster zum Erfassen und Bearbeiten von Fixkosten und Fixeinnahmen
                 <Modal
                     offen=modal_offen
                     on_close=Callback::new(move |_| set_modal_offen.set(false))
-                    titel=move || if bearbeiten_id.get().is_some() { "Fixkosten bearbeiten".to_string() } else { "Neue Fixkosten".to_string() }
+                    titel=move || modal_titel(art.get(), bearbeiten_id.get().is_some())
                 >
                     <form on:submit=on_submit class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="label py-1">
+                                <span class="label-text font-medium text-sm">"Art"</span>
+                            </label>
+                            <select
+                                class="select select-bordered w-full"
+                                on:change=move |ev| set_art.set(FixkostenArt::from_db_str(&event_target_value(&ev)))
+                            >
+                                {FixkostenArt::ALLE.into_iter().map(|a| view! {
+                                    <option value=a.as_str() selected=move || art.get() == a>{a.label()}</option>
+                                }).collect_view()}
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="label py-1">
+                                <span class="label-text font-medium text-sm">"Kategorie"</span>
+                            </label>
+                            <select
+                                class="select select-bordered w-full"
+                                on:change=move |ev| set_kategorie.set(Uuid::parse_str(&event_target_value(&ev)).ok())
+                            >
+                                <option value="" selected=move || kategorie.get().is_none()>"Ohne Kategorie"</option>
+                                {move || kategorien().into_iter().map(|k| {
+                                    let id = k.id;
+                                    view! {
+                                        <option value=id.to_string() selected=move || kategorie.get() == Some(id)>{k.name}</option>
+                                    }
+                                }).collect_view()}
+                            </select>
+                            {move || match kategorien_resource.get() {
+                                Some(Ok(liste)) if liste.is_empty() => view! {
+                                    <p class="text-xs text-base-content/60 mt-1">
+                                        "Noch keine Kategorien. Du kannst sie unter Einstellungen anlegen."
+                                    </p>
+                                }.into_any(),
+                                _ => ().into_any(),
+                            }}
+                        </div>
+
                         <div class="sm:col-span-2">
                             <label class="label py-1">
                                 <span class="label-text font-medium text-sm">"Buchungstext"</span>
                             </label>
                             <input
                                 type="text"
-                                placeholder="z.B. Miete, Krankenkasse, Strom..."
+                                placeholder="z.B. Miete, Krankenkasse, Strom oder Lohn..."
                                 class="input input-bordered w-full"
                                 prop:value=move || buchungstext.get()
                                 on:input=move |ev| set_buchungstext.set(event_target_value(&ev))
@@ -372,7 +417,7 @@ pub fn FixkostenSection() -> impl IntoView {
                     </div>
                 })}
 
-                // Tabelle Fixkosten
+                // Tabelle Fixkosten und Fixeinnahmen
                 <div class="overflow-x-auto -mx-2 sm:mx-0">
                     <Suspense fallback=move || view! {
                         <div class="flex justify-center p-8">
@@ -382,12 +427,30 @@ pub fn FixkostenSection() -> impl IntoView {
                         {move || {
                             fixkosten_resource.get().map(|res| match res {
                                 Ok(items) => {
-                                    // Summe pro Monat: nur Verträge, die im aktuellen Monat Kosten verursachen
-                                    let summe_pro_monat: f64 = items
+                                    // Summen pro Monat: nur Verträge, die im aktuellen Monat anfallen
+                                    let summe_kosten: f64 = items
                                         .iter()
-                                        .filter(|f| f.zaehlt_im_monat(today.year(), today.month()))
+                                        .filter(|f| !f.ist_einnahme() && f.zaehlt_im_monat(today.year(), today.month()))
                                         .map(FixkostenEintrag::monatsbetrag)
                                         .sum();
+                                    let summe_einnahmen: f64 = items
+                                        .iter()
+                                        .filter(|f| f.ist_einnahme() && f.zaehlt_im_monat(today.year(), today.month()))
+                                        .map(FixkostenEintrag::monatsbetrag)
+                                        .sum();
+                                    let differenz = summe_einnahmen - summe_kosten;
+                                    let differenz_text = if differenz >= 0.0 {
+                                        format!("+ CHF {:.2}", differenz)
+                                    } else {
+                                        format!("- CHF {:.2}", differenz.abs())
+                                    };
+                                    let differenz_klasse = if differenz >= 0.0 {
+                                        "text-right whitespace-nowrap text-success"
+                                    } else {
+                                        "text-right whitespace-nowrap text-error"
+                                    };
+
+                                    let kategorien_liste = kategorien();
 
                                     view! {
                                         <table class="table table-zebra table-xs w-full">
@@ -406,7 +469,7 @@ pub fn FixkostenSection() -> impl IntoView {
                                                     view! {
                                                         <tr>
                                                             <td colspan="6" class="text-center text-base-content/50 py-6">
-                                                                "Noch keine Fixkosten erfasst."
+                                                                "Noch keine Fixkosten oder Fixeinnahmen erfasst."
                                                             </td>
                                                         </tr>
                                                     }.into_any()
@@ -416,15 +479,30 @@ pub fn FixkostenSection() -> impl IntoView {
                                                         let aktueller_status = f.status;
                                                         let monatsbetrag = f.monatsbetrag();
                                                         let ist_monatlich = f.zahlungsperiode == Zahlungsperiode::Monatlich;
+                                                        let ist_einnahme = f.ist_einnahme();
+                                                        let kategorie_text = kategorie_name(&kategorien_liste, f.kategorie_id);
                                                         let zeilen_class = if aktueller_status == FixkostenStatus::Beendet {
                                                             "opacity-60"
                                                         } else {
                                                             ""
                                                         };
+                                                        let (betrag_text, betrag_klasse) = if ist_einnahme {
+                                                            (format!("+ CHF {:.2}", f.betrag), "font-semibold text-success")
+                                                        } else {
+                                                            (format!("CHF {:.2}", f.betrag), "font-semibold text-black")
+                                                        };
                                                         let zeile = f.clone();
                                                         view! {
                                                             <tr class=format!("{zeilen_class} cursor-pointer select-none hover:bg-base-200/60") title="Doppelklick zum Bearbeiten" on:dblclick=move |_| bearbeiten_oeffnen(zeile.clone())>
-                                                                <td class="font-medium">{f.buchungstext}</td>
+                                                                <td>
+                                                                    <div class="flex flex-wrap items-center gap-2 font-medium">
+                                                                        <span>{f.buchungstext}</span>
+                                                                        {ist_einnahme.then(|| view! {
+                                                                            <span class="badge badge-success badge-outline badge-xs whitespace-nowrap">"Einnahme"</span>
+                                                                        })}
+                                                                    </div>
+                                                                    <div class="text-xs text-base-content/60">{kategorie_text}</div>
+                                                                </td>
                                                                 <td class="whitespace-nowrap font-mono text-xs text-base-content/80">
                                                                     {f.beginndatum.format("%d.%m.%Y").to_string()}
                                                                 </td>
@@ -449,8 +527,8 @@ pub fn FixkostenSection() -> impl IntoView {
                                                                     </select>
                                                                 </td>
                                                                 <td class="text-right whitespace-nowrap">
-                                                                    <div class="font-semibold text-black">
-                                                                        {format!("CHF {:.2}", f.betrag)}
+                                                                    <div class=betrag_klasse>
+                                                                        {betrag_text}
                                                                     </div>
                                                                     {(!ist_monatlich).then(|| view! {
                                                                         <div class="text-xs text-base-content/60">
@@ -474,7 +552,33 @@ pub fn FixkostenSection() -> impl IntoView {
                                                         </div>
                                                     </td>
                                                     <td class="text-right text-black whitespace-nowrap">
-                                                        {format!("CHF {:.2}", summe_pro_monat)}
+                                                        {format!("CHF {:.2}", summe_kosten)}
+                                                    </td>
+                                                </tr>
+                                                <tr class="font-bold text-xs bg-base-200/50">
+                                                    <td colspan="5">
+                                                        <div class="flex flex-col">
+                                                            <span>"Summe Fixeinnahmen pro Monat"</span>
+                                                            <span class="text-xs font-normal text-base-content/70">
+                                                                "Aktive und gekündigte Einnahmen, auf den Monat umgerechnet"
+                                                            </span>
+                                                        </div>
+                                                    </td>
+                                                    <td class="text-right text-success whitespace-nowrap">
+                                                        {format!("+ CHF {:.2}", summe_einnahmen)}
+                                                    </td>
+                                                </tr>
+                                                <tr class="font-bold text-xs bg-base-200/50">
+                                                    <td colspan="5">
+                                                        <div class="flex flex-col">
+                                                            <span>"Differenz pro Monat"</span>
+                                                            <span class="text-xs font-normal text-base-content/70">
+                                                                "Fixeinnahmen minus Fixkosten"
+                                                            </span>
+                                                        </div>
+                                                    </td>
+                                                    <td class=differenz_klasse>
+                                                        {differenz_text}
                                                     </td>
                                                 </tr>
                                             </tfoot>
