@@ -1,11 +1,11 @@
-use chrono::{Datelike, Local};
+use chrono::{Datelike, Local, NaiveDate};
 use leptos::prelude::*;
 use uuid::Uuid;
 
 use crate::backend::budget::{
-    add_fixkosten, delete_fixkosten, get_fixkosten, kuendigungsfrist_text, update_fixkosten,
-    update_fixkosten_status, FixkostenArt, FixkostenDaten, FixkostenEintrag, FixkostenStatus,
-    Zahlungsperiode,
+    add_fixkosten, delete_fixkosten, filtere_fixkosten, get_fixkosten, kuendigungsfrist_text,
+    update_fixkosten, update_fixkosten_status, FixkostenArt, FixkostenDaten, FixkostenEintrag,
+    FixkostenFilter, FixkostenStatus, KategorieFilter, Zahlungsperiode,
 };
 use crate::backend::kategorien::{get_kategorien, kategorie_name};
 use crate::components::modal::Modal;
@@ -19,6 +19,31 @@ fn status_select_class(status: FixkostenStatus) -> &'static str {
         FixkostenStatus::Gekuendigt => "select select-xs select-bordered text-black font-medium",
         FixkostenStatus::Beendet => "select select-xs select-bordered text-base-content/50 font-medium",
     }
+}
+
+/// Status-Filter aus dem Auswahlfeld (leerer Wert = alle Status).
+fn status_filter_aus_wert(wert: &str) -> Option<FixkostenStatus> {
+    FixkostenStatus::ALLE
+        .into_iter()
+        .find(|s| s.as_str() == wert)
+}
+
+/// Kategorie-Filter aus dem Auswahlfeld (leer = alle, "ohne" = ohne Kategorie, sonst die Id).
+fn kategorie_filter_aus_wert(wert: &str) -> KategorieFilter {
+    match wert {
+        "" => KategorieFilter::Alle,
+        "ohne" => KategorieFilter::OhneKategorie,
+        _ => Uuid::parse_str(wert)
+            .map(KategorieFilter::Kategorie)
+            .unwrap_or_default(),
+    }
+}
+
+/// Wert eines Datumsfelds im Format JJJJ-MM-TT (leer, wenn kein Datum gesetzt ist).
+fn datum_feld_wert(datum: Option<NaiveDate>) -> String {
+    datum
+        .map(|d| d.format("%Y-%m-%d").to_string())
+        .unwrap_or_default()
 }
 
 /// Heutiges Datum im Format JJJJ-MM-TT (für das Datumsfeld).
@@ -54,6 +79,8 @@ pub fn FixkostenSection() -> impl IntoView {
     let (bearbeiten_id, set_bearbeiten_id) = signal(Option::<Uuid>::None);
     // Zweiter Klick auf "Löschen" bestätigt das Löschen
     let (loesch_bestaetigen, set_loesch_bestaetigen) = signal(false);
+    // Filter für die Tabelle: Kategorie, Beginn (von/bis) und Status
+    let (filter, set_filter) = signal(FixkostenFilter::default());
 
     let fixkosten_resource = Resource::new(|| (), |_| get_fixkosten());
     let kategorien_resource = Resource::new(|| (), |_| get_kategorien());
@@ -410,6 +437,82 @@ pub fn FixkostenSection() -> impl IntoView {
                     </div>
                 })}
 
+                // Filter: Kategorie, Beginn (von/bis) und Status
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
+                    <div>
+                        <label class="label py-1">
+                            <span class="label-text font-medium text-xs">"Kategorie"</span>
+                        </label>
+                        <select
+                            class="select select-bordered select-sm w-full"
+                            aria-label="Filter nach Kategorie"
+                            on:change=move |ev| set_filter.update(|f| f.kategorie = kategorie_filter_aus_wert(&event_target_value(&ev)))
+                        >
+                            <option value="" selected=move || filter.get().kategorie == KategorieFilter::Alle>"Alle Kategorien"</option>
+                            <option value="ohne" selected=move || filter.get().kategorie == KategorieFilter::OhneKategorie>"Ohne Kategorie"</option>
+                            {move || kategorien().into_iter().map(|k| {
+                                let id = k.id;
+                                view! {
+                                    <option value=id.to_string() selected=move || filter.get().kategorie == KategorieFilter::Kategorie(id)>{k.name}</option>
+                                }
+                            }).collect_view()}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="label py-1">
+                            <span class="label-text font-medium text-xs">"Beginn ab"</span>
+                        </label>
+                        <input
+                            type="date"
+                            aria-label="Filter: Beginn ab"
+                            class="input input-bordered input-sm w-full"
+                            prop:value=move || datum_feld_wert(filter.get().beginn_von)
+                            on:input=move |ev| set_filter.update(|f| f.beginn_von = NaiveDate::parse_from_str(&event_target_value(&ev), "%Y-%m-%d").ok())
+                        />
+                    </div>
+
+                    <div>
+                        <label class="label py-1">
+                            <span class="label-text font-medium text-xs">"Beginn bis"</span>
+                        </label>
+                        <input
+                            type="date"
+                            aria-label="Filter: Beginn bis"
+                            class="input input-bordered input-sm w-full"
+                            prop:value=move || datum_feld_wert(filter.get().beginn_bis)
+                            on:input=move |ev| set_filter.update(|f| f.beginn_bis = NaiveDate::parse_from_str(&event_target_value(&ev), "%Y-%m-%d").ok())
+                        />
+                    </div>
+
+                    <div>
+                        <label class="label py-1">
+                            <span class="label-text font-medium text-xs">"Status"</span>
+                        </label>
+                        <select
+                            class="select select-bordered select-sm w-full"
+                            aria-label="Filter nach Status"
+                            on:change=move |ev| set_filter.update(|f| f.status = status_filter_aus_wert(&event_target_value(&ev)))
+                        >
+                            <option value="" selected=move || filter.get().status.is_none()>"Alle Status"</option>
+                            {FixkostenStatus::ALLE.into_iter().map(|s| view! {
+                                <option value=s.as_str() selected=move || filter.get().status == Some(s)>{s.label()}</option>
+                            }).collect_view()}
+                        </select>
+                    </div>
+
+                    <div>
+                        <button
+                            type="button"
+                            class="btn btn-ghost btn-sm w-full"
+                            disabled=move || !filter.get().ist_aktiv()
+                            on:click=move |_| set_filter.set(FixkostenFilter::default())
+                        >
+                            "Filter zurücksetzen"
+                        </button>
+                    </div>
+                </div>
+
                 // Tabelle Fixkosten und Fixeinnahmen
                 <div class="overflow-x-auto -mx-2 sm:mx-0">
                     <Suspense fallback=move || view! {
@@ -419,7 +522,16 @@ pub fn FixkostenSection() -> impl IntoView {
                     }>
                         {move || {
                             fixkosten_resource.get().map(|res| match res {
-                                Ok(items) => {
+                                Ok(alle) => {
+                                    // Nur die Einträge, die zum Filter passen. Die Summen unten beziehen sich darauf.
+                                    let filter_aktiv = filter.get().ist_aktiv();
+                                    let items = filtere_fixkosten(&alle, &filter.get());
+                                    let anzahl_hinweis = filter_aktiv.then(|| format!(
+                                        "{} von {} Einträgen angezeigt. Die Summen unten beziehen sich nur auf diese Einträge.",
+                                        items.len(),
+                                        alle.len()
+                                    ));
+
                                     // Summen pro Monat: nur Verträge, die im aktuellen Monat anfallen
                                     let summe_kosten: f64 = items
                                         .iter()
@@ -446,6 +558,9 @@ pub fn FixkostenSection() -> impl IntoView {
                                     let kategorien_liste = kategorien();
 
                                     view! {
+                                        {anzahl_hinweis.map(|text| view! {
+                                            <p class="text-xs text-base-content/60 mb-2">{text}</p>
+                                        })}
                                         <table class="table table-zebra table-xs w-full">
                                             <thead>
                                                 <tr class="text-xs uppercase text-base-content/70">
@@ -459,10 +574,15 @@ pub fn FixkostenSection() -> impl IntoView {
                                             </thead>
                                             <tbody>
                                                 {if items.is_empty() {
+                                                    let leer_text = if alle.is_empty() {
+                                                        "Noch keine Fixkosten oder Fixeinnahmen erfasst."
+                                                    } else {
+                                                        "Keine Einträge passen zum gewählten Filter."
+                                                    };
                                                     view! {
                                                         <tr>
                                                             <td colspan="6" class="text-center text-base-content/50 py-6">
-                                                                "Noch keine Fixkosten oder Fixeinnahmen erfasst."
+                                                                {leer_text}
                                                             </td>
                                                         </tr>
                                                     }.into_any()
