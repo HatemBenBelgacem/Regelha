@@ -278,8 +278,8 @@ fn posten_zeile_view(zeile: PostenZeile, aktuell: Option<usize>) -> impl IntoVie
 fn gruppe_view(gruppe: Gruppe, aktuell: Option<usize>) -> impl IntoView {
     let Gruppe { titel, zeilen, zellen, summe, .. } = gruppe;
     view! {
-        <tr class="font-semibold bg-base-200/60">
-            <td class="sticky left-0 z-10 bg-base-200 whitespace-nowrap">{titel}</td>
+        <tr class="font-semibold bg-base-300 [&>td]:border-t-2 [&>td]:border-base-content/25">
+            <td class="sticky left-0 z-10 bg-base-300 whitespace-nowrap">{titel}</td>
             {zellen_views(zellen, aktuell)}
             {zelle_view(summe, false)}
         </tr>
