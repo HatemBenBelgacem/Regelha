@@ -356,6 +356,40 @@ pub fn filtere_fixkosten(
         .collect()
 }
 
+/// Filter für die Ein-/Ausgaben (Buchungstabelle). Ein nicht gesetztes Feld schränkt nichts ein.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct BuchungFilter {
+    /// Nur Buchungen dieser Art (None = Eingänge und Ausgänge)
+    pub art: Option<BuchungsArt>,
+    /// Nur Buchungen ab diesem Datum (inklusive)
+    pub datum_von: Option<NaiveDate>,
+    /// Nur Buchungen bis zu diesem Datum (inklusive)
+    pub datum_bis: Option<NaiveDate>,
+}
+
+impl BuchungFilter {
+    /// Ist mindestens ein Filter gesetzt?
+    pub fn ist_aktiv(&self) -> bool {
+        *self != Self::default()
+    }
+
+    /// Passt die Buchung zu allen gesetzten Filtern?
+    pub fn passt(&self, buchung: &Buchung) -> bool {
+        self.art.is_none_or(|art| buchung.art == art)
+            && self.datum_von.is_none_or(|von| buchung.erstellt_am >= von)
+            && self.datum_bis.is_none_or(|bis| buchung.erstellt_am <= bis)
+    }
+}
+
+/// Die Buchungen, die zum Filter passen. Die Reihenfolge bleibt erhalten.
+pub fn filtere_buchungen(buchungen: &[Buchung], filter: &BuchungFilter) -> Vec<Buchung> {
+    buchungen
+        .iter()
+        .filter(|b| filter.passt(b))
+        .cloned()
+        .collect()
+}
+
 /// Berechnet die Anzahl der Tage eines gegebenen Monats und Jahres.
 pub fn days_in_month(year: i32, month: u32) -> u32 {
     let (next_year, next_month) = if month == 12 {
@@ -1526,5 +1560,60 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(filtere_fixkosten(&liste, &filter), vec![von, bis]);
+    }
+
+    #[test]
+    fn buchung_filter_nach_art() {
+        let eingang = buchung((2026, 1, 5), 3000.0, BuchungsArt::Eingang);
+        let ausgang = buchung((2026, 1, 6), 40.0, BuchungsArt::Ausgang);
+        let liste = vec![eingang.clone(), ausgang.clone()];
+
+        let nur_ausgang = BuchungFilter {
+            art: Some(BuchungsArt::Ausgang),
+            ..Default::default()
+        };
+        assert!(nur_ausgang.ist_aktiv());
+        assert_eq!(filtere_buchungen(&liste, &nur_ausgang), vec![ausgang]);
+        // Ohne Filter bleiben alle Buchungen erhalten
+        assert!(!BuchungFilter::default().ist_aktiv());
+        assert_eq!(filtere_buchungen(&liste, &BuchungFilter::default()), liste);
+    }
+
+    #[test]
+    fn buchung_filter_nach_datum_bereich_mit_grenzen_inklusive() {
+        let vor_zeitraum = buchung((2025, 12, 31), 1.0, BuchungsArt::Ausgang);
+        let von = buchung((2026, 1, 1), 2.0, BuchungsArt::Ausgang);
+        let bis = buchung((2026, 1, 31), 3.0, BuchungsArt::Eingang);
+        let nach_zeitraum = buchung((2026, 2, 1), 4.0, BuchungsArt::Eingang);
+        let liste = vec![vor_zeitraum, von.clone(), bis.clone(), nach_zeitraum];
+
+        let filter = BuchungFilter {
+            datum_von: Some(NaiveDate::from_ymd_opt(2026, 1, 1).unwrap()),
+            datum_bis: Some(NaiveDate::from_ymd_opt(2026, 1, 31).unwrap()),
+            ..Default::default()
+        };
+        assert_eq!(filtere_buchungen(&liste, &filter), vec![von.clone(), bis.clone()]);
+
+        // Nur "von" gesetzt: alles ab diesem Datum
+        let nur_von = BuchungFilter {
+            datum_von: Some(NaiveDate::from_ymd_opt(2026, 1, 31).unwrap()),
+            ..Default::default()
+        };
+        assert_eq!(filtere_buchungen(&liste, &nur_von).len(), 2);
+    }
+
+    #[test]
+    fn buchung_filter_art_und_datum_kombiniert() {
+        let jan_eingang = buchung((2026, 1, 10), 3000.0, BuchungsArt::Eingang);
+        let jan_ausgang = buchung((2026, 1, 12), 90.0, BuchungsArt::Ausgang);
+        let feb_ausgang = buchung((2026, 2, 3), 15.0, BuchungsArt::Ausgang);
+        let liste = vec![jan_eingang, jan_ausgang.clone(), feb_ausgang];
+
+        let filter = BuchungFilter {
+            art: Some(BuchungsArt::Ausgang),
+            datum_von: Some(NaiveDate::from_ymd_opt(2026, 1, 1).unwrap()),
+            datum_bis: Some(NaiveDate::from_ymd_opt(2026, 1, 31).unwrap()),
+        };
+        assert_eq!(filtere_buchungen(&liste, &filter), vec![jan_ausgang]);
     }
 }

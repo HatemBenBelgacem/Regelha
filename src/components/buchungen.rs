@@ -1,14 +1,22 @@
-use chrono::Local;
+use chrono::{Local, NaiveDate};
 use leptos::prelude::*;
 
 use crate::components::modal::Modal;
 use crate::backend::budget::{
-    add_buchung, delete_buchung, get_buchungen, update_buchung, Buchung, BuchungsArt,
+    add_buchung, delete_buchung, filtere_buchungen, get_buchungen, update_buchung, Buchung,
+    BuchungFilter, BuchungsArt,
 };
 
 /// Heutiges Datum im Format JJJJ-MM-TT (für das Datumsfeld).
 fn heute_iso() -> String {
     Local::now().date_naive().format("%Y-%m-%d").to_string()
+}
+
+/// Wert eines Datumsfelds im Format JJJJ-MM-TT (leer, wenn kein Datum gesetzt ist).
+fn datum_feld_wert(datum: Option<NaiveDate>) -> String {
+    datum
+        .map(|d| d.format("%Y-%m-%d").to_string())
+        .unwrap_or_default()
 }
 
 #[component]
@@ -17,7 +25,8 @@ pub fn BuchungenSection() -> impl IntoView {
     let (buchungstext, set_buchungstext) = signal(String::new());
     let (betrag_input, set_betrag_input) = signal(String::new());
     let (art, set_art) = signal(BuchungsArt::Eingang);
-    let (filter_art, set_filter_art) = signal(Option::<BuchungsArt>::None);
+    // Filter für die Tabelle: Buchungsart und Datum (von/bis)
+    let (filter, set_filter) = signal(BuchungFilter::default());
     let (error_msg, set_error_msg) = signal(Option::<String>::None);
     let (modal_offen, set_modal_offen) = signal(false);
     // Id der Buchung, die gerade bearbeitet wird (None = neue Buchung)
@@ -179,32 +188,88 @@ pub fn BuchungenSection() -> impl IntoView {
                         "+ Neue Buchung"
                     </button>
 
-                    // Filter: Alle / Zahlungseingänge / Zahlungsausgänge
-                    <div class="join flex flex-wrap">
-                        <button
-                            type="button"
-                            class=move || format!("btn join-item {}", if filter_art.get().is_none() { "btn-primary" } else { "btn-ghost" })
-                            on:click=move |_| set_filter_art.set(None)
-                        >
-                            "Alle"
-                        </button>
-                        <button
-                            type="button"
-                            class=move || format!("btn join-item {}", if filter_art.get() == Some(BuchungsArt::Eingang) { "btn-success text-success-content" } else { "btn-ghost" })
-                            on:click=move |_| set_filter_art.set(Some(BuchungsArt::Eingang))
-                        >
-                            "Eingänge"
-                        </button>
-                        <button
-                            type="button"
-                            class=move || format!("btn join-item {}", if filter_art.get() == Some(BuchungsArt::Ausgang) { "btn-error text-error-content" } else { "btn-ghost" })
-                            on:click=move |_| set_filter_art.set(Some(BuchungsArt::Ausgang))
-                        >
-                            "Ausgänge"
-                        </button>
-                    </div>
                     </div>
                 </div>
+
+                // Filter: Buchungsart, Datum von/bis (Bereich, Grenzen inklusive) und Zurücksetzen
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
+                    <div>
+                        <label class="label py-1">
+                            <span class="label-text font-medium text-xs">"Buchungsart"</span>
+                        </label>
+                        <div class="join w-full">
+                            <button
+                                type="button"
+                                class=move || format!("btn btn-sm join-item flex-1 {}", if filter.get().art.is_none() { "btn-primary" } else { "btn-ghost" })
+                                on:click=move |_| set_filter.update(|f| f.art = None)
+                            >
+                                "Alle"
+                            </button>
+                            <button
+                                type="button"
+                                class=move || format!("btn btn-sm join-item flex-1 {}", if filter.get().art == Some(BuchungsArt::Eingang) { "btn-success text-success-content" } else { "btn-ghost" })
+                                on:click=move |_| set_filter.update(|f| f.art = Some(BuchungsArt::Eingang))
+                            >
+                                "Eingänge"
+                            </button>
+                            <button
+                                type="button"
+                                class=move || format!("btn btn-sm join-item flex-1 {}", if filter.get().art == Some(BuchungsArt::Ausgang) { "btn-error text-error-content" } else { "btn-ghost" })
+                                on:click=move |_| set_filter.update(|f| f.art = Some(BuchungsArt::Ausgang))
+                            >
+                                "Ausgänge"
+                            </button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="label py-1">
+                            <span class="label-text font-medium text-xs">"Datum von"</span>
+                        </label>
+                        <input
+                            type="date"
+                            aria-label="Filter: Datum von"
+                            class="input input-bordered input-sm w-full"
+                            prop:value=move || datum_feld_wert(filter.get().datum_von)
+                            on:input=move |ev| set_filter.update(|f| f.datum_von = NaiveDate::parse_from_str(&event_target_value(&ev), "%Y-%m-%d").ok())
+                        />
+                    </div>
+
+                    <div>
+                        <label class="label py-1">
+                            <span class="label-text font-medium text-xs">"Datum bis"</span>
+                        </label>
+                        <input
+                            type="date"
+                            aria-label="Filter: Datum bis"
+                            class="input input-bordered input-sm w-full"
+                            prop:value=move || datum_feld_wert(filter.get().datum_bis)
+                            on:input=move |ev| set_filter.update(|f| f.datum_bis = NaiveDate::parse_from_str(&event_target_value(&ev), "%Y-%m-%d").ok())
+                        />
+                    </div>
+
+                    <div>
+                        <button
+                            type="button"
+                            class="btn btn-ghost btn-sm w-full"
+                            disabled=move || !filter.get().ist_aktiv()
+                            on:click=move |_| set_filter.set(BuchungFilter::default())
+                        >
+                            "Filter zurücksetzen"
+                        </button>
+                    </div>
+                </div>
+                {move || {
+                    let f = filter.get();
+                    match (f.datum_von, f.datum_bis) {
+                        (Some(von), Some(bis)) if von > bis => Some(view! {
+                            <div class="alert alert-warning py-2 text-sm">
+                                <span>"Das Datum «von» liegt nach dem Datum «bis». Es werden keine Buchungen angezeigt."</span>
+                            </div>
+                        }),
+                        _ => None,
+                    }
+                }}
 
                 // Modalfenster zum Erfassen und Bearbeiten von Buchungen (inkl. Datum, Buchungstext, Betrag)
                 <Modal
@@ -317,14 +382,20 @@ pub fn BuchungenSection() -> impl IntoView {
                     }>
                         {move || {
                             buchungen_resource.get().map(|res| match res {
-                                Ok(items) => {
-                                    let filtered: Vec<_> = items
-                                        .into_iter()
-                                        .filter(|b| match filter_art.get() {
-                                            Some(target) => b.art == target,
-                                            None => true,
-                                        })
-                                        .collect();
+                                Ok(alle) => {
+                                    // Nur die Buchungen, die zum Filter passen. Die Summen unten beziehen sich darauf.
+                                    let filter_aktiv = filter.get().ist_aktiv();
+                                    let filtered = filtere_buchungen(&alle, &filter.get());
+                                    let anzahl_hinweis = filter_aktiv.then(|| format!(
+                                        "{} von {} Buchungen angezeigt. Die Summen unten beziehen sich nur auf diese Buchungen.",
+                                        filtered.len(),
+                                        alle.len()
+                                    ));
+                                    let leer_text = if alle.is_empty() {
+                                        "Keine Buchungen vorhanden."
+                                    } else {
+                                        "Keine Buchungen passen zum gewählten Filter."
+                                    };
 
                                     let summe_eingang: f64 = filtered
                                         .iter()
@@ -344,6 +415,9 @@ pub fn BuchungenSection() -> impl IntoView {
                                     };
 
                                     view! {
+                                        {anzahl_hinweis.map(|text| view! {
+                                            <p class="text-xs text-base-content/60 mb-2">{text}</p>
+                                        })}
                                         <table class="table table-zebra table-xs w-full">
                                             <thead>
                                                 <tr class="text-xs uppercase text-base-content/70">
@@ -358,7 +432,7 @@ pub fn BuchungenSection() -> impl IntoView {
                                                     view! {
                                                         <tr>
                                                             <td colspan="4" class="text-center text-base-content/50 py-6">
-                                                                "Keine Buchungen vorhanden."
+                                                                {leer_text}
                                                             </td>
                                                         </tr>
                                                     }.into_any()
