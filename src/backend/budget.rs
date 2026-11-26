@@ -300,6 +300,62 @@ pub fn berechne_kategorie_summen(
     summen
 }
 
+/// Filter nach Kategorie in der Fixkosten-Liste.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum KategorieFilter {
+    /// Keine Einschränkung auf eine Kategorie
+    #[default]
+    Alle,
+    /// Nur Einträge ohne Kategorie
+    OhneKategorie,
+    /// Nur Einträge dieser Kategorie
+    Kategorie(Uuid),
+}
+
+/// Filter für die Liste der Fixkosten und Fixeinnahmen. Ein nicht gesetztes Feld schränkt nichts ein.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct FixkostenFilter {
+    pub kategorie: KategorieFilter,
+    /// Nur Einträge mit diesem Status (None = alle Status)
+    pub status: Option<FixkostenStatus>,
+    /// Nur Einträge, die ab diesem Datum beginnen (inklusive)
+    pub beginn_von: Option<NaiveDate>,
+    /// Nur Einträge, die bis zu diesem Datum beginnen (inklusive)
+    pub beginn_bis: Option<NaiveDate>,
+}
+
+impl FixkostenFilter {
+    /// Ist mindestens ein Filter gesetzt?
+    pub fn ist_aktiv(&self) -> bool {
+        *self != Self::default()
+    }
+
+    /// Passt der Eintrag zu allen gesetzten Filtern?
+    pub fn passt(&self, eintrag: &FixkostenEintrag) -> bool {
+        let kategorie_passt = match self.kategorie {
+            KategorieFilter::Alle => true,
+            KategorieFilter::OhneKategorie => eintrag.kategorie_id.is_none(),
+            KategorieFilter::Kategorie(id) => eintrag.kategorie_id == Some(id),
+        };
+        kategorie_passt
+            && self.status.is_none_or(|status| eintrag.status == status)
+            && self.beginn_von.is_none_or(|von| eintrag.beginndatum >= von)
+            && self.beginn_bis.is_none_or(|bis| eintrag.beginndatum <= bis)
+    }
+}
+
+/// Die Einträge, die zum Filter passen. Die Reihenfolge bleibt erhalten.
+pub fn filtere_fixkosten(
+    eintraege: &[FixkostenEintrag],
+    filter: &FixkostenFilter,
+) -> Vec<FixkostenEintrag> {
+    eintraege
+        .iter()
+        .filter(|e| filter.passt(e))
+        .cloned()
+        .collect()
+}
+
 /// Berechnet die Anzahl der Tage eines gegebenen Monats und Jahres.
 pub fn days_in_month(year: i32, month: u32) -> u32 {
     let (next_year, next_month) = if month == 12 {
@@ -1415,5 +1471,60 @@ mod tests {
         // Nur November (Monat von `bis`) ist der aktuelle Monat
         assert_eq!(zeilen.iter().filter(|z| z.ist_aktueller_monat).count(), 1);
         assert!(zeilen[10].ist_aktueller_monat);
+    }
+
+    #[test]
+    fn filter_nach_status() {
+        let aktiv = fixkosten(100.0, (2025, 1, 1), Zahlungsperiode::Monatlich, FixkostenStatus::Aktiv);
+        let gekuendigt = fixkosten(200.0, (2025, 1, 1), Zahlungsperiode::Monatlich, FixkostenStatus::Gekuendigt);
+        let beendet = fixkosten(300.0, (2025, 1, 1), Zahlungsperiode::Monatlich, FixkostenStatus::Beendet);
+        let liste = vec![aktiv, gekuendigt.clone(), beendet];
+
+        let filter = FixkostenFilter {
+            status: Some(FixkostenStatus::Gekuendigt),
+            ..Default::default()
+        };
+        assert!(filter.ist_aktiv());
+        assert_eq!(filtere_fixkosten(&liste, &filter), vec![gekuendigt]);
+        // Ohne Filter bleiben alle Einträge erhalten
+        assert!(!FixkostenFilter::default().ist_aktiv());
+        assert_eq!(filtere_fixkosten(&liste, &FixkostenFilter::default()).len(), 3);
+    }
+
+    #[test]
+    fn filter_nach_kategorie() {
+        let wohnen = Uuid::new_v4();
+        let mut miete = fixkosten(980.0, (2024, 1, 1), Zahlungsperiode::Monatlich, FixkostenStatus::Aktiv);
+        miete.kategorie_id = Some(wohnen);
+        let ohne = fixkosten(10.0, (2024, 1, 1), Zahlungsperiode::Monatlich, FixkostenStatus::Aktiv);
+        let liste = vec![miete.clone(), ohne.clone()];
+
+        let nur_wohnen = FixkostenFilter {
+            kategorie: KategorieFilter::Kategorie(wohnen),
+            ..Default::default()
+        };
+        assert_eq!(filtere_fixkosten(&liste, &nur_wohnen), vec![miete]);
+
+        let nur_ohne = FixkostenFilter {
+            kategorie: KategorieFilter::OhneKategorie,
+            ..Default::default()
+        };
+        assert_eq!(filtere_fixkosten(&liste, &nur_ohne), vec![ohne]);
+    }
+
+    #[test]
+    fn filter_nach_beginn_datum_mit_grenzen_inklusive() {
+        let vor_zeitraum = fixkosten(1.0, (2024, 12, 31), Zahlungsperiode::Monatlich, FixkostenStatus::Aktiv);
+        let von = fixkosten(2.0, (2025, 1, 1), Zahlungsperiode::Monatlich, FixkostenStatus::Aktiv);
+        let bis = fixkosten(3.0, (2025, 6, 1), Zahlungsperiode::Monatlich, FixkostenStatus::Aktiv);
+        let nach_zeitraum = fixkosten(4.0, (2025, 6, 2), Zahlungsperiode::Monatlich, FixkostenStatus::Aktiv);
+        let liste = vec![vor_zeitraum, von.clone(), bis.clone(), nach_zeitraum];
+
+        let filter = FixkostenFilter {
+            beginn_von: Some(NaiveDate::from_ymd_opt(2025, 1, 1).unwrap()),
+            beginn_bis: Some(NaiveDate::from_ymd_opt(2025, 6, 1).unwrap()),
+            ..Default::default()
+        };
+        assert_eq!(filtere_fixkosten(&liste, &filter), vec![von, bis]);
     }
 }
